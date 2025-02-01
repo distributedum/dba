@@ -27,15 +27,15 @@ Submitted projects must be fully authored by the students and must not contain m
 
 | # | Date       | Topic | Mat.       | Read |
 |:-:|:----------:|:------|:------:|:-------:|
-| T1 | 4/2/25 | Introduction. |  | P1
+| T1 | 4/2/25 | Introduction. |  | B2; P1
 | T2 |  | Physical representation. | | B1 13 |
-| T3 | | Query execution. | | B1 15; P2 |
+| T3 | | Query execution (1). | | B1 15; P2 |
 |   | 11/2/25 | [SEI](https://seium.org/) | |
 | PL1 | 18/2/25  | Lab 1: Resources. | |
 | PL2 | 22/2/25  | Lab 2: Execution. | |
-| T4 | 11/3/25 | Indexes and materialized views. | | B1 8,14|
-| T5 | | Optimization (1). | | B1 16 |
-| T6 | | Optimization (2). | | P3 |
+| T4 | 11/3/25 | Query execution (2). | | B2 15,20 |
+| T5 | | Indexes and materialized views. | | B1 8,14|
+| T6 | | Query optimization. | | B1 16; P3 |
 | PL3 | 18/3/25  | Lab 3: Redundancy. | |
 | PL4 | 25/3/25  | Lab 4: Optimization. | |
 | T7 | 1/4/25 | Transactional recovery. | | B1 17 |
@@ -58,6 +58,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | # |  Title | 
 |:-:|------------|
 | B1 | H. Garcia-Molina, J. Ullman and J. Widom. [Database Systems: The Complete Book](http://infolab.stanford.edu/~ullman/dscb.html). Prentice-Hall, 2006 (2nd Edition).
+| B2 | J. M. Hellerstein, M. Stonebraker, and J. Hamilton. [Architecture of a Database System](https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf) Foundations and Trends® in Databases, vol. 1, no. 2, pp. 141–259, 2007.
 | P1 | M. Stonebraker and A. Pavlo. [What Goes Around Comes Around... And Around](https://db.cs.cmu.edu/papers/2024/whatgoesaround-sigmodrec2024.pdf) SIGMOD Record, vol. 53, no. 2, p. 21, 2024. | 
 | P2 | T. Kersten, V. Leis, A. Kemper, T. Neumann, A. Pavlo, and P. Boncz, [Everything you always wanted to know about compiled and vectorized queries but were afraid to ask](https://doi.org/10.14778/3275366.3284966). In Proceedings VLDB Endowment, vol. 11, no. 13, pp. 2209–2222, Jan. 2019. |
 | P3 | Y. Zhang, Y. Chronis, J. Patel, and T. Rekatsinas, [Simple adaptive query processing vs. Learned query optimizers: Observations and analysis](https://doi.org/10.14778/3611479.3611501). In Proceedings VLDB Endowment, vol. 16, no. 11, pp. 2962–2975, Jul. 2023. |
