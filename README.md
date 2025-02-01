@@ -32,7 +32,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | T3 | | Query execution (1). | | B1 15; P2 |
 |   | 11/2/25 | [SEI](https://seium.org/) | |
 | PL1 | 18/2/25  | Lab 1: Resources. | |
-| PL2 | 22/2/25  | Lab 2: Execution. | |
+| PL2 | 25/2/25  | Lab 2: Execution. | |
 | T4 | 11/3/25 | Query execution (2). | | B2 15,20 |
 | T5 | | Indexes and materialized views. | | B1 8,14|
 | T6 | | Query optimization. | | B1 16; P3 |
