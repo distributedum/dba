@@ -3,7 +3,7 @@
 
 A course on database systems technology providing a bottom-up perspective of database administration, based on the assumption that solid knowledge of the main performance, reliability, and scale challenges in data management allows administrators to diagnose problems, formulate testable hypotheses, and apply creative solutions in a variety of current data management systems.
 
-This approach contrasts with the common but limiting view of database administration as the repetitive application of recipes prescribed for a specific system. Therefore, this course addresses the concerns of database administrators facing a growing diversity of tools, but also application developers and integrators where data management is their greatest challenge).
+This approach contrasts with the common but limiting view of database administration as the repetitive application of recipes prescribed for a specific system. Therefore, this course addresses the concerns of database administrators facing a growing diversity of tools, but also application developers and integrators where data management is their greatest challenge.
 
 ## Learning outcomes
 
@@ -14,7 +14,7 @@ This approach contrasts with the common but limiting view of database administra
 
 ## Grading
 
-The grade is has two components:
+The grade has two components:
 
 - Group project (50%), with discussion required for grades over 16/20.
 - Written exam (50%), with at least 8/20.
@@ -27,9 +27,9 @@ Submitted projects must be fully authored by the students and must not contain m
 
 | # | Date       | Topic | Mat.       | Read |
 |:-:|:----------:|:------|:------:|:-------:|
-| T1 | 4/2/25 | Introduction. |  | B2; P1
-| T2 |  | Physical representation. | | B1 13 |
-| T3 | | Query execution (1). | | B1 15; P2 |
+| T1 | 4/2/25 | Introduction. | [&#128462;](materials/00-intro.pdf) | B2; P1
+| T2 |  | Physical representation. | [&#128462;](materials/01-relational.pdf) | B1 13 |
+| T3 | | Query execution (1). | [&#128462;](materials/02-relational.pdf) | B1 15; P2 |
 |   | 11/2/25 | [SEI](https://seium.org/) | |
 | PL1 | 18/2/25  | Lab 1: Resources. | |
 | PL2 | 25/2/25  | Lab 2: Execution. | |
