@@ -33,9 +33,9 @@ Submitted projects must be fully authored by the students and must not contain m
 |   | 11/2/25 | [SEI](https://seium.org/) | |
 | PL1 | 18/2/25  | Lab 1: Resources. | [pdf](materials/lab1.pdf) [zip](materials/skelbench.zip) |
 | PL2 | 25/2/25  | Lab 2: Execution. | [pdf](materials/lab2.pdf) [zip](materials/lab2.zip) |
-| T4 | 11/3/25 | Query execution (2). | | B2 15,20 |
-| T5 | | Indexes and materialized views. | | B1 8,14|
-| T6 | | Query optimization. | | B1 16; P3 |
+| T4 | 11/3/25 | Query execution (2). | [&#128462;](materials/03-relational.pdf) | B2 15,20 |
+| T5 | | Indexes and materialized views. | [&#128462;](materials/04-relational.pdf) | B1 8,14|
+| T6 | | Query optimization. | [&#128462;](materials/05-relational.pdf) | B1 16; P3 |
 | PL3 | 18/3/25  | Lab 3: Redundancy. | |
 | PL4 | 25/3/25  | Lab 4: Optimization. | |
 | T7 | 1/4/25 | Transactional recovery. | | B1 17 |
