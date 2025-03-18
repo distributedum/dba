@@ -69,3 +69,7 @@ Submitted projects must be fully authored by the students and must not contain m
 The default project will be proposed before 29/3/25.
 
 The R&D project focuses on executing [Trampoline-Style Queries for SQL](https://vldb.org/cidrdb/papers/2025/p1-lambrecht.pdf). Interested students should contact instructors ASAP.
+
+### Group registration
+
+Document with the information about each group: [Google Sheets](https://docs.google.com/spreadsheets/d/1AuE9QCOCohBLbDCZz7CgWuYxq7QSER9fR-lKU6aE2ag/edit?usp=sharing).
