@@ -36,7 +36,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | T4 | 11/3/25 | Query execution (2). | | B2 15,20 |
 | T5 | | Indexes and materialized views. | | B1 8,14|
 | T6 | | Query optimization. | | B1 16; P3 |
-| PL3 | 18/3/25  | Lab 3: Redundancy. | |
+| PL3 | 18/3/25  | Lab 3: Redundancy. | [pdf](materials/lab3.pdf) [weights](https://storage.googleapis.com/abd25/lab3.zip) |
 | PL4 | 25/3/25  | Lab 4: Optimization. | |
 | T7 | 1/4/25 | Transactional recovery. | | B1 17 |
 | T8 |  | Transactional isolation (1). | | B1 18 |
