@@ -41,7 +41,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | T7 | 1/4/25 | Transactional recovery. | [&#128462;](materials/06-acid.pdf) | B1 17 |
 | T8 |  | Transactional isolation (1). | [&#128462;](materials/07-acid.pdf) | B1 18 |
 | T10 | | Transactional isolation (2). | [&#128462;](materials/08-acid.pdf) | B1 19; P4 |
-| PL5 | 8/4/25  | Lab 5: Transactions. | |
+| PL5 | 8/4/25  | Lab 5: Transactions. | [pdf](materials/lab5.pdf) [zip](materials/skelbench-v2.zip) |
 | T9 | 22/4/25  | Talk (to be confirmed). | |
 | PL6 |   | Project. | |
 | T10 | 29/4/25  | Talk (to be confirmed). | |
