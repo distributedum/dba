@@ -33,7 +33,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | # | Date       | Topic | Mat.       | Read |
 |:-:|:----------:|:------|:------:|:-------:|
 | T1 | 25/9/25 | Introduction. |  |
-| PL1 |   | Lab 1: Resources. |  |
+| PL1 |   | Lab 1: Resources. | [pdf](/materials/lab0.pdf) [zip](materials/skelbench0.zip) |
 
 - Subject to change, watch Blackboard for notifications.
 - T - Lectures; PL - Labs.
