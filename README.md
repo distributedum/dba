@@ -35,7 +35,8 @@ Submitted projects must be fully authored by the students and must not contain m
 | T1 | 25/9/25 | Introduction. |  [&#128462;](materials/01-relational.pdf) | B2; P1
 | T2 |    | Physical Representation.| [&#128462;](materials/01-relational.pdf) | B1 13 |
 | PL1 |   | Lab 0: Benchmark. | [pdf](/materials/lab0.pdf) [zip](materials/skelbench0.zip) |
-| PL2 |   | Lab 1: Resources. | [pdf](/materials/lab1.pdf) [zip](materials/skelbench.zip) |
+| PL2 | 2/10/25  | Lab 1: Resources. | [pdf](/materials/lab1.pdf) [zip](materials/skelbench.zip) |
+| T3 | 9/10/25   | Query execution. | [&#128462;](materials/02-relational.pdf) | B1 15 |
 | PL3 |   | Lab 2: Execution. | [pdf](/materials/lab2.pdf) [zip](materials/lab2.zip) |
 
 - Subject to change, watch Blackboard for notifications.
