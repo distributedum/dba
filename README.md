@@ -50,7 +50,18 @@ Submitted projects must be fully authored by the students and must not contain m
 | B2 | J. M. Hellerstein, M. Stonebraker, and J. Hamilton. [Architecture of a Database System](https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf) Foundations and Trends® in Databases, vol. 1, no. 2, pp. 141–259, 2007.
 | B3 | B. Ding, V. R. Narasayya, and S. Chaudhuri, [Extensible Query Optimizers in Practice](https://www.microsoft.com/en-us/research/publication/extensible-query-optimizers-in-practice/). Foundations and Trends® in Databases, 2024.
 | P1 | M. Stonebraker and A. Pavlo. [What Goes Around Comes Around... And Around](https://db.cs.cmu.edu/papers/2024/whatgoesaround-sigmodrec2024.pdf) SIGMOD Record, vol. 53, no. 2, p. 21, 2024. | 
+| P2 | T. Kersten, V. Leis, A. Kemper, T. Neumann, A. Pavlo, and P. Boncz, [Everything you always wanted to know about compiled and vectorized queries but were afraid to ask](https://doi.org/10.14778/3275366.3284966). In Proceedings VLDB Endowment, vol. 11, no. 13, pp. 2209–2222, Jan. 2019. |
+| P3 | V. Leis, A. Gubichev, A. Mirchev, P. Boncz, A. Kemper, and T. Neumann, [How good are query optimizers, really?](https://15721.courses.cs.cmu.edu/spring2024/papers/16-costmodels/p204-leis.pdf), Proceedings VLDB Endowment, vol. 9, no. 3, pp. 204–215, Nov. 2015. |
+| P4 | A. Prout et al., [Cloud-Native Transactions and Analytics in SingleStore](https://doi.org/10.1145/3514221.3526055). In Proceedings of the 2022 International Conference on Management of Data, SIGMOD’22, 2022. |
+
+## Projects
+
+The default project will be proposed before 31/10/25.
+
+The R&D project focuses on an experimental assessment of the internals of query optimization in Postgresql as described in ["An elephant under the microscope: Analyzing the interaction of optimizer components in PostgreSQL"](https://dl.acm.org/doi/pdf/10.1145/3709659) and the [PostBOUND tool](https://github.com/rbergm/PostBOUND). Interested students should contact instructors ASAP.
 
 ## Past editions
 
 - [2024/2025](./editions/2024_2025/)
+
+
