@@ -38,6 +38,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL2 | 2/10/25  | Lab 1: Resources. | [pdf](/materials/lab1.pdf) [zip](materials/skelbench.zip) |
 | T3 | 9/10/25   | Query execution. | [&#128462;](materials/02-relational.pdf) | B1 15 |
 | PL3 |   | Lab 2: Execution. | [pdf](/materials/lab2.pdf) [zip](materials/lab2.zip) |
+| T4 | 16/10/25   | Redundancy. | [&#128462;](materials/03-relational.pdf) | B1 8,14 |
 | PL4 |   | Lab 3: Execution. | [pdf](/materials/lab3.pdf) [zip](https://storage.googleapis.com/abd_data/embedding.zip) |
 
 - Subject to change, watch Blackboard for notifications.
