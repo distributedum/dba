@@ -42,6 +42,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL4 |   | Lab 3: Redundancy. | [pdf](/materials/lab3.pdf) [zip](https://storage.googleapis.com/abd_data/embedding.zip) |
 | T5 | 23/10/25  | Execution. | [&#128462;](materials/04-relational.pdf) | B1 15 |
 | T6 |    | Execution. | [&#128462;](materials/05-relational.pdf) | P2 |
+| PL5 |   | Lab 4: Optimization. | [pdf](/materials/lab4.pdf) |
 
 
 - Subject to change, watch Blackboard for notifications.
