@@ -65,7 +65,7 @@ Submitted projects must be fully authored by the students and must not contain m
 
 ## Projects
 
-The default project will be proposed before 31/10/25.
+The project is now available in Github Classroom.
 
 The R&D project focuses on an experimental assessment of the internals of query optimization in Postgresql as described in ["An elephant under the microscope: Analyzing the interaction of optimizer components in PostgreSQL"](https://dl.acm.org/doi/pdf/10.1145/3709659) and the [PostBOUND tool](https://github.com/rbergm/PostBOUND). Interested students should contact instructors ASAP.
 
