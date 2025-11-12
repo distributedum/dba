@@ -42,8 +42,10 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL4 |   | Lab 3: Redundancy. | [pdf](/materials/lab3.pdf) [zip](https://storage.googleapis.com/abd_data/embedding.zip) |
 | T5 | 23/10/25  | Execution. | [&#128462;](materials/04-relational.pdf) | B1 15 |
 | T6 |    | Execution. | [&#128462;](materials/05-relational.pdf) | P2 |
-| T7 | 30/10/25 | Cost estimation. | [&#128462;](materials/06-relational.pdf) | B1 16; B3 5 |
+| T7 | 30/10/25 | Cost estimation. | [&#128462;](materials/06-relational.pdf) | B1 16; B3 5; P3 |
 | PL5 |   | Lab 4: Optimization. | [pdf](/materials/lab4.pdf) |
+| T8 | 06/10/25 | Optimization. | [&#128462;](materials/07-relational.pdf) | B1 16; B3 2,4 |
+| PL6 |   | Lab 4: Optimization (cont). |  |
 
 
 - Subject to change, watch Blackboard for notifications.
