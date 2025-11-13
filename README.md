@@ -46,6 +46,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL5 |   | Lab 4: Optimization. | [pdf](/materials/lab4.pdf) |
 | T8 | 06/10/25 | Optimization. | [&#128462;](materials/07-relational.pdf) | B1 16; B3 2,4 |
 | PL6 |   | Lab 4: Optimization (cont). |  |
+| PL7 |   | Lab 5: Optimization II | [pdf](/materials/lab5.pdf) |
 
 
 - Subject to change, watch Blackboard for notifications.
