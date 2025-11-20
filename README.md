@@ -48,6 +48,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL6 |   | Lab 4: Optimization (cont). |  |
 | T9 | 13/11/25 | Transactional recovery. | [&#128462;](materials/08-acid.pdf) |  B4 9-11; B1 17 |
 | PL7 |   | Lab 5: Optimization II. | [pdf](/materials/lab5.pdf) |
+| T10 | 13/11/25 | Transactional isolation. | [&#128462;](materials/09-acid.pdf) |  B4 9-11; B1 17 |
 | PL8 |   | Lab 6: Isolation and Recovery. | [pdf](/materials/lab6.pdf) [zip](/materials/skelbench-v2.zip) |
 
 
@@ -61,7 +62,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | B1 | H. Garcia-Molina, J. Ullman and J. Widom. [Database Systems: The Complete Book](http://infolab.stanford.edu/~ullman/dscb.html). Prentice-Hall, 2006 (2nd Edition).
 | B2 | J. M. Hellerstein, M. Stonebraker, and J. Hamilton. [Architecture of a Database System](https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf) Foundations and Trends® in Databases, vol. 1, no. 2, pp. 141–259, 2007.
 | B3 | B. Ding, V. R. Narasayya, and S. Chaudhuri, [Extensible Query Optimizers in Practice](https://www.microsoft.com/en-us/research/publication/extensible-query-optimizers-in-practice/). Foundations and Trends® in Databases, 2024.
-| B4 | J. Gray and A. Reuter. [Transaction processing: Concepts and techniques](). Morgan-Kaufmann, 1993. 
+| B4 | J. Gray and A. Reuter. Transaction processing: Concepts and techniques. Morgan-Kaufmann, 1993. 
 | P1 | M. Stonebraker and A. Pavlo. [What Goes Around Comes Around... And Around](https://db.cs.cmu.edu/papers/2024/whatgoesaround-sigmodrec2024.pdf) SIGMOD Record, vol. 53, no. 2, p. 21, 2024. | 
 | P2 | T. Kersten, V. Leis, A. Kemper, T. Neumann, A. Pavlo, and P. Boncz, [Everything you always wanted to know about compiled and vectorized queries but were afraid to ask](https://doi.org/10.14778/3275366.3284966). In Proceedings VLDB Endowment, vol. 11, no. 13, pp. 2209–2222, Jan. 2019. |
 | P3 | V. Leis, A. Gubichev, A. Mirchev, P. Boncz, A. Kemper, and T. Neumann, [How good are query optimizers, really?](https://15721.courses.cs.cmu.edu/spring2024/papers/16-costmodels/p204-leis.pdf), Proceedings VLDB Endowment, vol. 9, no. 3, pp. 204–215, Nov. 2015. |
