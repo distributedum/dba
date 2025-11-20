@@ -48,7 +48,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL6 |   | Lab 4: Optimization (cont). |  |
 | T9 | 13/11/25 | Transactional recovery. | [&#128462;](materials/08-acid.pdf) |  B4 9-11; B1 17 |
 | PL7 |   | Lab 5: Optimization II. | [pdf](/materials/lab5.pdf) |
-| T10 | 13/11/25 | Transactional isolation. | [&#128462;](materials/09-acid.pdf) |  B4 9-11; B1 17 |
+| T10 | 20/11/25 | Transactional isolation. | [&#128462;](materials/09-acid.pdf) |  B4 9-11; B1 17 |
 | PL8 |   | Lab 6: Isolation and Recovery. | [pdf](/materials/lab6.pdf) [zip](/materials/skelbench-v2.zip) |
 
 
