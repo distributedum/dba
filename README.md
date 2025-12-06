@@ -52,6 +52,8 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL8 |   | Lab 6: Isolation and Recovery. | [pdf](/materials/lab6.pdf) [zip](/materials/skelbench-v2.zip) |
 | T11 | 27/11/25 | Transactional isolation (cont). | [&#128462;](materials/10-acid.pdf) |  B4 7; P4 |
 | PL9 |   | Lab 6: Isolation and Recovery (cont). |  |
+| T12 | 4/12/25 | What next? | [&#128462;](materials/11-next.pdf) |   |
+| PL10 |   | Project |  |
 
 - Subject to change, watch Blackboard for notifications.
 - T - Lectures; PL - Labs.
