@@ -50,7 +50,7 @@ Submitted projects must be fully authored by the students and must not contain m
 
 ## Past editions
 
-- [2025/2026](/editions/2025_2026/)
-- [2024/2025](/editions/2024_2025/)
+- [2025/2026](editions/2025_2026/)
+- [2024/2025](editions/2024_2025/)
 
 
