@@ -32,8 +32,8 @@ Submitted projects must be fully authored by the students and must not contain m
 
 | # | Date       | Topic | Mat.       | Read |
 |:-:|:----------:|:------|:------:|:-------:|
-| T1 | 25/9/26 | Introduction. |   | 
-| PL1 |   | Lab 0: Benchmark. |  |
+| T1 | 24/9/26 | Introduction. |   | 
+| PL1 |   | Lab 0: Benchmark. | [lab0.pdf](materials/lab0.pdf) [skelbench0.zip](materials/skelbench0.zip)  |
 
 ## Bibliography
 
