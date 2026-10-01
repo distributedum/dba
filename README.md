@@ -55,3 +55,6 @@ Submitted projects must be fully authored by the students and must not contain m
 - [2024/2025](editions/2024_2025/)
 
 
+## Google Cloud Credits Link
+
+https://docs.google.com/spreadsheets/d/1yoNJEWmqPgq5GT7WgW3w-rTjDoEH4WK4f6Mb5Zqpyo4/edit?usp=sharing
