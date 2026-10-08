@@ -36,6 +36,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL1 |   | Lab 0: Benchmark. | [pdf](materials/lab0.pdf) [zip](materials/skelbench0.zip)  |
 | T1 | 1/10/26 | Physical representation. |  [&#128462;](materials/01-relational.pdf) | B1 13
 | PL2 |   | Lab 1: Resources. | [pdf](materials/lab1.pdf) [zip](materials/skelbench.zip)  |
+| PL3 |   | Lab 2: Execution. | [pdf](materials/lab2.pdf) [zip](materials/lab2.zip)  |
 
 ## Bibliography
 
