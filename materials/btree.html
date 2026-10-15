@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>B-Tree Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: control rail on the left, a large projector-friendly tree stage on the right, step narration above the stage */
+:root {
+  --bg: #ffffff; --panel: #ffffff; --ink: #222222; --muted: #6f6f6f; --line: #e5e5e5;
+  --box: #ececec; --accent: #267cb9; --accent-hover: #006699; --on-accent: #ffffff;
+  --node: #ffffff; --node-stroke: #444444; --slot-empty: #eff1f3; --edge: #9aa0a6; --dot: rgba(0, 0, 0, .08);
+  --visit: #2a66c9; --visit-bg: #e2ebfa;
+  --ok: #1d8048; --ok-bg: #dcf1e3;
+  --bad: #c3362b; --bad-bg: #fbe1de;
+  --found: #a86400; --found-bg: #fcecc9;
+  --split: #7448bd; --split-bg: #ece4f9;
+  --font-display: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+    --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+    --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+    --visit: #7eaaf6; --visit-bg: #1b2943;
+    --ok: #5dca8b; --ok-bg: #163222;
+    --bad: #f27c70; --bad-bg: #3d1c19;
+    --found: #f2b74e; --found-bg: #3a2b0f;
+    --split: #b597f2; --split-bg: #2a2142;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+  --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+  --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+  --visit: #7eaaf6; --visit-bg: #1b2943;
+  --ok: #5dca8b; --ok-bg: #163222;
+  --bad: #f27c70; --bad-bg: #3d1c19;
+  --found: #f2b74e; --found-bg: #3a2b0f;
+  --split: #b597f2; --split-bg: #2a2142;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap {
+  max-width: 1680px; margin: 0 auto;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { display: flex; align-items: flex-start; gap: 20px; min-width: 0; }
+.brand .logo { margin-top: 4px; }
+.brand .logo { display: block; flex: none; background: #ffffff; border-radius: 4px; line-height: 0; }
+.brand .logo img { width: 96px; height: auto; display: block; }
+.course { margin: 0 0 4px; font-size: 14px; color: var(--muted); }
+.course a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.course a:hover, .course a:focus-visible { color: var(--accent-hover); text-decoration: underline; }
+@media (max-width: 560px) { .brand .logo img { width: 64px; } }
+footer.credit { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }
+footer.credit a { color: var(--accent); text-decoration: none; }
+footer.credit a:hover { text-decoration: underline; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.rules { margin: 6px 0 0; color: var(--muted); max-width: 90ch; }
+.rules b { color: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.controls { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; }
+label { font-weight: 500; font-size: 14px; }
+
+#keyInput { font: 500 20px var(--font-mono); padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+#keyInput::placeholder { color: var(--muted); opacity: .7; font: 400 15px var(--font-body); }
+input:focus-visible, button:focus-visible, select:focus-visible, #log li:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btnrow > button { flex: 1 1 auto; }
+button { font: 500 14px var(--font-body); padding: 9px 12px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
+button:disabled { opacity: .4; cursor: default; }
+.btnrow.small button { font-size: 13px; padding: 7px 8px; }
+
+select { font: 14px var(--font-body); padding: 7px 8px; border-radius: 7px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > label { display: flex; justify-content: space-between; gap: 8px; }
+output { font-family: var(--font-mono); color: var(--muted); font-size: 13px; font-weight: 400; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 400; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 8px; font-weight: 600; background: var(--panel); color: var(--muted); }
+.seg button + button { border-left: 1.5px solid var(--line); }
+.seg button[aria-pressed="true"], .seg button[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+.scan { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.scan input { font: 500 17px var(--font-mono); width: 4.6em; padding: 7px 8px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.scan span { color: var(--muted); font-size: 14px; }
+.scan button { flex: 1 1 auto; }
+.msg { margin: 0; font-size: 14px; min-height: 1.5em; color: var(--muted); }
+.msg.err { color: var(--bad); }
+
+.stats dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.stats dl > div { display: flex; flex-direction: column; }
+.stats dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.stats dd { margin: 0; font: 600 22px var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.board { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.stepbar { background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
+.stepnav { display: flex; gap: 4px; align-items: center; }
+.stepnav button { padding: 6px 8px; display: grid; place-items: center; }
+.stepnav svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+#playBtn { padding: 6px 12px; }
+#counter { font: 500 13px var(--font-mono); color: var(--muted); margin-left: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#caption { margin: 0; font-size: 18px; flex: 1 1 380px; min-width: 0; line-height: 1.45; }
+
+.stage {
+  background-color: transparent;
+  background-image: radial-gradient(var(--dot) 1.1px, transparent 1.4px);
+  background-size: 22px 22px;
+  border: 1px solid var(--box); border-radius: 10px;
+  min-height: 380px; overflow: auto; display: flex; padding: 16px;
+}
+#svg { margin: auto; display: block; flex: none; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+
+.inorder { margin: 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.inorder #inorder { font-family: var(--font-mono); color: var(--ink); }
+
+.logbox { position: relative; max-height: 260px; overflow: auto; background: transparent; border: 1px solid var(--box); border-radius: 10px; }
+.loghead { margin: 0; padding: 10px 14px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+#log { list-style: none; margin: 0; padding: 4px 6px 8px; }
+#log li { display: grid; grid-template-columns: 2.2em 7.2em minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; align-items: baseline; font-size: 14px; }
+#log li:hover { background: var(--bg); }
+#log li.active { background: var(--visit-bg); }
+#log .n { font: 12px var(--font-mono); color: var(--muted); text-align: right; }
+#log .tag { justify-self: start; }
+
+.tag { display: inline-block; font: 600 11px/1.6 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; vertical-align: 2px; border: 1px solid currentColor; white-space: nowrap; }
+#caption .tag { margin-right: 6px; }
+.t-visit { color: var(--visit); background: var(--visit-bg); }
+.t-ok { color: var(--ok); background: var(--ok-bg); }
+.t-bad { color: var(--bad); background: var(--bad-bg); }
+.t-split { color: var(--split); background: var(--split-bg); }
+.t-found { color: var(--found); background: var(--found-bg); }
+.t-info { color: var(--muted); background: var(--bg); }
+.kc { font: 600 .95em var(--font-mono); background: var(--found-bg); color: var(--found); padding: 0 5px; border-radius: 4px; }
+.nk { font-family: var(--font-mono); font-size: .95em; white-space: nowrap; }
+
+/* tree drawing */
+#svg text { font: 500 18px var(--font-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#svg .frame { fill: var(--node); stroke: none; }
+#svg .outline { fill: none; stroke: var(--node-stroke); stroke-width: 1.5; }
+#svg .divider { stroke: var(--node-stroke); stroke-opacity: .3; stroke-width: 1; }
+#svg .emptyslot { fill: var(--slot-empty); }
+#svg .bgk { fill: transparent; }
+#svg .key { cursor: pointer; }
+#svg .key:not(.sep):hover .bgk { fill: var(--bad-bg); }
+#svg .key:not(.sep):hover text { fill: var(--bad); }
+#svg .key.sep { cursor: default; }
+#svg .key.sep:not(.hk) text { fill: var(--muted); }
+#svg .leaflink { stroke: var(--edge); stroke-width: 1.8; fill: none; }
+#svg .leaflink.hot { stroke: var(--found); stroke-width: 3.5; }
+#svg .arrowhead { fill: var(--edge); }
+#svg .arrowhead.hot { fill: var(--found); }
+#svg .key.hk .bgk { fill: var(--found-bg); }
+#svg .key.hk text { fill: var(--found); font-weight: 700; }
+#svg .edge { stroke: var(--edge); stroke-width: 1.6; fill: none; }
+#svg .ptr { fill: var(--edge); }
+#svg .s-visit .frame { fill: var(--visit-bg); } #svg .s-visit .outline { stroke: var(--visit); stroke-width: 3; }
+#svg .s-ok .frame { fill: var(--ok-bg); } #svg .s-ok .outline { stroke: var(--ok); stroke-width: 3; }
+#svg .s-bad .frame { fill: var(--bad-bg); } #svg .s-bad .outline { stroke: var(--bad); stroke-width: 3; }
+#svg .s-split .frame { fill: var(--split-bg); } #svg .s-split .outline { stroke: var(--split); stroke-width: 3; }
+#svg .s-found .frame { fill: var(--found-bg); } #svg .s-found .outline { stroke: var(--found); stroke-width: 3; }
+#svg .emptytree { font: italic 400 15px var(--font-body); fill: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <a class="logo" href="https://distributedum.github.io/dba/" title="Database Administration course page"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaUAAAFICAMAAADH1hHAAAAA0mVYSWZJSSoACAAAAAoAAAEEAAEAAAClAQAAAQEEAAEAAABIAQAAAgEDAAMAAACGAAAAEgEDAAEAAAABAAAAGgEFAAEAAACMAAAAGwEFAAEAAACUAAAAKAEDAAEAAAACAAAAMQECAA8AAACcAAAAMgECABQAAACsAAAAaYcEAAEAAADAAAAAAAAAAAgACAAIAEgAAAABAAAASAAAAAEAAABHSU1QIDMuMC4wLVJDMgAAMjAyNTowMToxOCAyMDo1NDoyMAABAAGgAwABAAAAAQAAAAAAAACGG2U6AAABfmlDQ1BJQ0MgcHJvZmlsZQAAeJx9kTtIA0EURc9uFEWUgKYQsdhCrbTxh2AToxCECCEqJGrhfkwMZDdhN8EmpWAbsPDTGLWwsdbWwlYQBD8g9oKVoo2ElckGEsT4mjncefcx7w7I5YxuOi1BMK28HQuHlHhiRWl7RaKbABNMq7qTm4lGIzStr3skcd6NiFnN+/6sLmPD0UFSgKCes/MgrQOTW/mc4H0goG+qBkjnwLAdT6yA9Ch0zeM3wakqy2JmwF6KzYIcAJRUA2sNrG/aJsjjwIBhWgbIcY8NwUXBZqag194pNuzcsJYXhQ70E2aeBaIoaBRIkyHPCGksFBxihAk18fdV/VEKaGRIo6MwRxYTtepH/MHvbJ3k2Kg3qTMErS+u+zEIbbtQKbnu97HrVk7A9wxXVt2fLcPUJ/hKdW3gCPzbcHFd17Q9uNyB3qecaqtVyQfIySS8n0FXAnpuoWPVy612z+kDLBUhcgMHhzCUAv9ak73bG3P7t6eW3w8ZKnLpf5uDuAAADXppVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+Cjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDQuNC4wLUV4aXYyIj4KIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIgogICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgIHhtbG5zOkdJTVA9Imh0dHA6Ly93d3cuZ2ltcC5vcmcveG1wLyIKICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIgogICB4bXBNTTpEb2N1bWVudElEPSJnaW1wOmRvY2lkOmdpbXA6OTNiMzc4ZTgtN2EzYS00YzFmLWI0ZDEtZWVjYjI1NDk2M2JiIgogICB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjdjM2JmNjgyLTEyOWItNDIxZS04NTg3LThmYjRkOTczMTc2OSIKICAgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ4bXAuZGlkOjk2MjYzYjQyLTU3N2EtNDg4MC1iNGE2LWE0ZTljNjdlNTY2NiIKICAgZGM6Rm9ybWF0PSJpbWFnZS9wbmciCiAgIEdJTVA6QVBJPSIzLjAiCiAgIEdJTVA6UGxhdGZvcm09IkxpbnV4IgogICBHSU1QOlRpbWVTdGFtcD0iMTczNzIzMzY2MjQxMjM1MyIKICAgR0lNUDpWZXJzaW9uPSIzLjAuMC1SQzIiCiAgIHRpZmY6T3JpZW50YXRpb249IjEiCiAgIHhtcDpDcmVhdG9yVG9vbD0iR0lNUCIKICAgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNTowMToxOFQyMDo1NDoyMCswMDowMCIKICAgeG1wOk1vZGlmeURhdGU9IjIwMjU6MDE6MThUMjA6NTQ6MjArMDA6MDAiPgogICA8eG1wTU06SGlzdG9yeT4KICAgIDxyZGY6U2VxPgogICAgIDxyZGY6bGkKICAgICAgc3RFdnQ6YWN0aW9uPSJzYXZlZCIKICAgICAgc3RFdnQ6Y2hhbmdlZD0iLyIKICAgICAgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDoxODM0ODVhMy05ZjdmLTQ0MWQtYjc5ZC1hNjA2NzRjYzQxZjciCiAgICAgIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkdJTVAgMy4wLjAtUkMyIChMaW51eCkiCiAgICAgIHN0RXZ0OndoZW49IjIwMjUtMDEtMThUMjA6NTQ6MjIrMDA6MDAiLz4KICAgIDwvcmRmOlNlcT4KICAgPC94bXBNTTpIaXN0b3J5PgogIDwvcmRmOkRlc2NyaXB0aW9uPgogPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgIAo8P3hwYWNrZXQgZW5kPSJ3Ij8+RU8QCAAAAwBQTFRFAAAAAQEBAgICAwMDBAQEBQUFBgYGBwcHCAgICQkJCgoKCwsLDAwMDQ0NDg4ODw8PEBAQEREREhISExMTFBQUFRUVFhYWFxcXGBgYGRkZGhoaGxsbHBwcHR0dHh4eHx8fICAgISEhIiIiIyMjJCQkJSUlJiYmJycnKCgoKSkpKioqKysrLCwsLS0tLi4uLy8vMDAwMTExMjIyMzMzNDQ0NTU1NjY2Nzc3ODg4OTk5Ojo6Ozs7PDw8PT09Pj4+Pz8/QEBAQUFBQkJCQ0NDRERERUVFRkZGR0dHSEhISUlJSkpKS0tLTExMTU1NTk5OT09PUFBQUVFRUlJSU1NTVFRUVVVVVlZWV1dXWFhYWVlZWlpaW1tbXFxcXV1dXl5eX19fYGBgYWFhYmJiY2NjZGRkZWVlZmZmZ2dnaGhoaWlpampqa2trbGxsbW1tbm5ub29vcHBwcXFxcnJyc3NzdHR0dXV1dnZ2d3d3eHh4eXl5enp6e3t7fHx8fX19fn5+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" alt="Universidade do Minho"></a>
+      <div>
+        <p class="course"><a href="https://distributedum.github.io/dba/">Database Administration</a> · Master in Informatics Engineering</p>
+        <h1>B-Tree Workbench</h1>
+        <p class="rules" id="rules"></p>
+      </div>
+    </div>
+    <button id="themeBtn" type="button">Dark mode</button>
+  </header>
+
+  <main class="layout">
+    <aside class="controls">
+      <section class="card">
+        <div class="seg" role="group" aria-label="Structure">
+          <button id="modeB" type="button" aria-pressed="true">B-tree</button>
+          <button id="modeBP" type="button" aria-pressed="false">B+-tree</button>
+        </div>
+        <label for="keyInput">Keys</label>
+        <input id="keyInput" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. 42  ·  5 9 13  ·  1..20">
+        <div class="btnrow">
+          <button id="insBtn" class="primary" type="button">Insert</button>
+          <button id="delBtn" type="button">Delete</button>
+          <button id="findBtn" type="button">Search</button>
+        </div>
+        <p class="hint" id="keyHint">Enter inserts, Shift+Enter deletes. Click any key in the tree to delete it.</p>
+        <label for="scanLo">Range scan</label>
+        <div class="scan">
+          <input id="scanLo" type="text" inputmode="numeric" autocomplete="off" value="5" aria-label="Lower bound">
+          <span>to</span>
+          <input id="scanHi" type="text" inputmode="numeric" autocomplete="off" value="17" aria-label="Upper bound">
+          <button id="scanBtn" type="button">Scan</button>
+        </div>
+        <p id="msg" class="msg" role="status"></p>
+        <div class="btnrow small">
+          <button id="rnd1" type="button">+1 random</button>
+          <button id="rnd10" type="button">+10 random</button>
+          <button id="undoBtn" type="button">Undo</button>
+          <button id="clearBtn" type="button">Clear</button>
+        </div>
+      </section>
+
+      <section class="card stats">
+        <h2>Current tree</h2>
+        <dl>
+          <div><dt>Keys</dt><dd id="stKeys">0</dd></div>
+          <div><dt>Nodes</dt><dd id="stNodes">0</dd></div>
+          <div><dt>Height</dt><dd id="stHeight">0</dd></div>
+          <div><dt>Fill</dt><dd id="stFill">0%</dd></div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Tree rules</h2>
+        <div class="field">
+          <label for="orderSel">Order m (max children per node)</label>
+          <select id="orderSel"></select>
+          <p class="hint" id="orderHint"></p>
+        </div>
+        <div class="field" id="biasField">
+          <label for="biasSel">When a split cannot be even</label>
+          <select id="biasSel">
+            <option value="upper">Left half keeps the extra key</option>
+            <option value="lower">Right half keeps the extra key</option>
+          </select>
+        </div>
+        <div class="field" id="replField">
+          <label for="replSel">Deleting a key from an internal node</label>
+          <select id="replSel">
+            <option value="pred">Replace with in-order predecessor</option>
+            <option value="succ">Replace with in-order successor</option>
+          </select>
+        </div>
+        <h2>Display</h2>
+        <label class="check"><input type="checkbox" id="capChk" checked> Show empty key slots</label>
+        <label class="check"><input type="checkbox" id="animChk" checked> Play each operation step by step</label>
+        <div class="field">
+          <label for="speed">Time per step <output id="speedOut">1.1 s</output></label>
+          <input type="range" id="speed" min="300" max="3000" step="100" value="1100">
+        </div>
+        <div class="field">
+          <label for="zoom">Zoom <output id="zoomOut">100%</output></label>
+          <input type="range" id="zoom" min="50" max="200" step="10" value="100">
+        </div>
+      </section>
+    </aside>
+
+    <section class="board">
+      <div class="stepbar">
+        <div class="stepnav">
+          <button id="firstBtn" type="button" aria-label="First step" title="First step"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button id="prevBtn" type="button" aria-label="Previous step" title="Previous step (←)"><svg viewBox="0 0 24 24"><path d="M16 5v14L5 12z"/></svg></button>
+          <button id="playBtn" type="button" aria-label="Play" title="Play / pause (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+          <button id="nextBtn" type="button" aria-label="Next step" title="Next step (→)"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <button id="lastBtn" type="button" aria-label="Last step" title="Last step"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          <span id="counter"></span>
+        </div>
+        <p id="caption" aria-live="polite"></p>
+      </div>
+
+      <div class="stage" id="stage"><svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B-tree diagram"></svg></div>
+
+      <div class="legend">
+        <span><i style="background:var(--visit-bg);border-color:var(--visit)"></i>Visited on the way down</span>
+        <span><i style="background:var(--ok-bg);border-color:var(--ok)"></i>Changed, valid</span>
+        <span><i style="background:var(--bad-bg);border-color:var(--bad)"></i>Overflow / underflow</span>
+        <span><i style="background:var(--split-bg);border-color:var(--split)"></i>Split / borrow / merge</span>
+        <span><i style="background:var(--found-bg);border-color:var(--found)"></i>Key in focus</span>
+        <span id="legendLink" hidden><svg width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path d="M1 5H19" stroke="var(--edge)" stroke-width="1.8" fill="none"/><path d="M17 1L25 5L17 9z" fill="var(--edge)"/></svg>Next-leaf link</span>
+      </div>
+
+      <p class="inorder"><span id="inorderLabel">In-order traversal:</span> <span id="inorder"></span></p>
+
+      <div class="logbox" id="logBox">
+        <p class="loghead">Steps of the last operation</p>
+        <ol id="log"></ol>
+      </div>
+    </section>
+  </main>
+
+  <footer class="credit">
+    <span><a href="https://distributedum.github.io/dba/">Database Administration</a> · Universidade do Minho</span>
+    <span>Built with Claude, Anthropic's AI assistant.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const SLOT = 48, H = 44, VGAP = 76, PAD = 24;
+  const $ = id => document.getElementById(id);
+  const S = { mode: 'b', M: 4, bias: 'upper', repl: 'pred', showCap: true, animate: true, speed: 1100, zoom: 1 };
+  const SAMPLE = [10, 20, 5, 6, 12, 30, 7, 17, 3, 25, 40, 1, 15];
+
+  let nextId = 1, root, order = [], history = [];
+  let steps = [], cur = 0, playing = false, timer = 0, rafId = 0, shownPos = null, recording = true;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ---------- B-tree core ----------
+  const BP = () => S.mode === 'bplus';
+  const mk = leaf => ({ id: nextId++, leaf, keys: [], children: [] });
+  const clone = n => ({ id: n.id, leaf: n.leaf, keys: n.keys.slice(), children: n.children.map(clone) });
+  const maxK = () => S.M - 1;
+  const minK = () => Math.ceil(S.M / 2) - 1;
+  const minLeaf = () => Math.floor(S.M / 2);
+  const minOf = n => (BP() && n.leaf) ? minLeaf() : minK();
+  const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const K = k => `<span class="kc">${k}</span>`;
+  const NK = ks => `<span class="nk">[${ks.length ? ks.join(' | ') : '&nbsp;'}]</span>`;
+  const lowerIdx = (ks, k) => { let i = 0; while (i < ks.length && ks[i] < k) i++; return i; };
+  const upperIdx = (ks, k) => { let i = 0; while (i < ks.length && ks[i] <= k) i++; return i; };
+  // B+-tree: a key equal to a separator lives in the right subtree
+  const childIdx = (ks, k) => BP() ? upperIdx(ks, k) : lowerIdx(ks, k);
+  function route(ks, k, i) {
+    if (i === 0) return `${k} &lt; ${ks[0]}`;
+    if (i === ks.length) return `${k} ${BP() ? '≥' : '&gt;'} ${ks[i - 1]}`;
+    return `${ks[i - 1]} ${BP() ? '≤' : '&lt;'} ${k} &lt; ${ks[i]}`;
+  }
+  const follow = (n, i) => `follow child pointer ${i + 1} of ${n.children.length}`;
+  const isEmpty = () => root.leaf && root.keys.length === 0;
+  function heightOf(t) {
+    if (t.leaf && !t.keys.length) return 0;
+    let h = 1; while (!t.leaf) { t = t.children[0]; h++; } return h;
+  }
+  function leafList(t) { const out = []; (function w(n) { if (n.leaf) out.push(n); else n.children.forEach(w); })(t); return out; }
+  function rec(kind, msg, hl = {}, hk = [], extra = {}) {
+    if (!recording) return;
+    steps.push({ kind, msg, hl, hk: [].concat(hk), tree: clone(root), ...extra });
+  }
+
+  function splitNode(n) {
+    const L = n.keys.length, full = n.keys.slice(), right = mk(n.leaf);
+    if (BP() && n.leaf) {
+      const keep = S.bias === 'upper' ? Math.ceil(L / 2) : Math.floor(L / 2);
+      right.keys = n.keys.splice(keep);
+      return { right, up: right.keys[0], full, copy: true };
+    }
+    const mid = L % 2 ? (L - 1) / 2 : (S.bias === 'upper' ? L / 2 : L / 2 - 1);
+    const up = n.keys[mid];
+    right.keys = n.keys.splice(mid + 1);
+    n.keys.pop();
+    if (!n.leaf) right.children = n.children.splice(mid + 1);
+    return { right, up, full, copy: false };
+  }
+
+  function insertKey(k) {
+    if (isEmpty()) {
+      root.keys.push(k);
+      rec('insert', `Insert ${K(k)} into the empty root, which is also a leaf.`, { [root.id]: 'ok' }, k);
+      return true;
+    }
+    const path = [];
+    let n = root;
+    for (;;) {
+      path.push(n);
+      if (!BP()) {
+        const j = lowerIdx(n.keys, k);
+        if (n.keys[j] === k) {
+          rec('dup', `${K(k)} is already in ${NK(n.keys)}. Duplicate keys are rejected.`, { [n.id]: 'bad' }, k);
+          return false;
+        }
+      }
+      if (n.leaf) break;
+      const i = childIdx(n.keys, k);
+      rec('visit', `Insert ${K(k)}: at ${NK(n.keys)}, ${route(n.keys, k, i)}, so ${follow(n, i)}.`, { [n.id]: 'visit' });
+      n = n.children[i];
+    }
+    if (n.keys.includes(k)) {
+      rec('dup', `${K(k)} is already in the leaf ${NK(n.keys)}. Duplicate keys are rejected.`, { [n.id]: 'bad' }, k);
+      return false;
+    }
+    n.keys.splice(lowerIdx(n.keys, k), 0, k);
+    if (n.keys.length <= maxK()) {
+      rec('insert', `Insert ${K(k)} into the leaf, giving ${NK(n.keys)}. It uses ${n.keys.length} of ${maxK()} slots, so no split is needed.`, { [n.id]: 'ok' }, k);
+      return true;
+    }
+    rec('over', `Insert ${K(k)} into the leaf, giving ${NK(n.keys)}. Overflow: ${n.keys.length} keys, but the maximum is ${maxK()}.`, { [n.id]: 'bad' }, k);
+
+    let lvl = path.length - 1;
+    while (n.keys.length > maxK()) {
+      const { right, up, full, copy } = splitNode(n);
+      const lead = copy
+        ? `Split the leaf ${NK(full)} into ${NK(n.keys)} and ${NK(right.keys)}, and link the new leaf into the leaf chain. Copy ${K(up)}, the first key of the right leaf, up as a separator; ${up} also stays in the leaf. The separator `
+        : `Split ${NK(full)} at the median ${K(up)}: left ${NK(n.keys)}, right ${NK(right.keys)}. ${K(up)} `;
+      const verb = copy ? 'goes' : 'moves';
+      const parent = lvl > 0 ? path[lvl - 1] : null;
+      if (!parent) {
+        const r = mk(false);
+        r.keys = [up]; r.children = [n, right]; root = r;
+        rec('root', `${lead}${verb} up and becomes the new root, so the height grows to ${heightOf(root)}.`, { [n.id]: 'split', [right.id]: 'split', [r.id]: 'ok' }, up);
+        break;
+      }
+      const ci = parent.children.indexOf(n);
+      parent.keys.splice(ci, 0, up);
+      parent.children.splice(ci + 1, 0, right);
+      if (parent.keys.length > maxK()) {
+        rec('split', `${lead}${verb} up, and the parent ${NK(parent.keys)} now overflows too.`, { [n.id]: 'split', [right.id]: 'split', [parent.id]: 'bad' }, up);
+      } else {
+        rec('split', `${lead}${verb} up into the parent, giving ${NK(parent.keys)}.`, { [n.id]: 'split', [right.id]: 'split', [parent.id]: 'ok' }, up);
+      }
+      n = parent; lvl--;
+    }
+    return true;
+  }
+
+  function searchKey(k) {
+    if (isEmpty()) { rec('miss', `The tree is empty, so ${K(k)} is not found.`); return false; }
+    let n = root, visited = 0;
+    for (;;) {
+      visited++;
+      if (!BP() || n.leaf) {
+        if (n.keys.includes(k)) {
+          rec('found', `Found ${K(k)} in ${BP() ? 'the leaf ' : ''}${NK(n.keys)} after reading ${pl(visited, 'node')}.`, { [n.id]: 'found' }, k);
+          return true;
+        }
+      }
+      if (n.leaf) {
+        rec('miss', `${K(k)} is not in the leaf ${NK(n.keys)}. The search ends: key not found after reading ${pl(visited, 'node')}.`, { [n.id]: 'bad' });
+        return false;
+      }
+      const i = childIdx(n.keys, k);
+      const sepNote = BP() && n.keys.includes(k) ? ` Here ${k} is only a separator, so the search continues down to a leaf.` : '';
+      rec('visit', `Search ${K(k)}: at ${NK(n.keys)}, ${route(n.keys, k, i)}, so ${follow(n, i)}.${sepNote}`, { [n.id]: 'visit' }, sepNote ? k : []);
+      n = n.children[i];
+    }
+  }
+
+  function deleteKey(k) {
+    if (isEmpty()) { rec('miss', `The tree is empty; there is no ${K(k)} to delete.`); return false; }
+    return BP() ? deleteBPlus(k) : deleteBTree(k);
+  }
+
+  function deleteBTree(k) {
+    const path = [];
+    let n = root, idx;
+    for (;;) {
+      path.push(n);
+      idx = lowerIdx(n.keys, k);
+      if (n.keys[idx] === k) break;
+      if (n.leaf) {
+        rec('miss', `${K(k)} is not in the leaf ${NK(n.keys)}, so it is not in the tree. Nothing to delete.`, { [n.id]: 'bad' });
+        return false;
+      }
+      rec('visit', `Delete ${K(k)}: at ${NK(n.keys)}, ${route(n.keys, k, idx)}, so ${follow(n, idx)}.`, { [n.id]: 'visit' });
+      n = n.children[idx];
+    }
+    rec('found', `Found ${K(k)} in ${n.leaf ? 'the leaf' : 'the internal node'} ${NK(n.keys)}.`, { [n.id]: 'found' }, k);
+
+    const underNote = m => (m !== root && m.keys.length < minK())
+      ? ` Underflow: ${pl(m.keys.length, 'key')}, but the minimum is ${minK()}.` : '';
+
+    if (!n.leaf) {
+      const pred = S.repl === 'pred';
+      let m = n.children[pred ? idx : idx + 1];
+      while (!m.leaf) { path.push(m); m = pred ? m.children[m.children.length - 1] : m.children[0]; }
+      path.push(m);
+      const rk = pred ? m.keys[m.keys.length - 1] : m.keys[0];
+      n.keys[idx] = rk;
+      rec('replace', `${K(k)} is in an internal node, so overwrite it with its in-order ${pred ? 'predecessor' : 'successor'} ${K(rk)}, the ${pred ? 'largest key in the left' : 'smallest key in the right'} subtree. Then remove ${K(rk)} from its leaf.`, { [n.id]: 'ok', [m.id]: 'visit' }, rk);
+      if (pred) m.keys.pop(); else m.keys.shift();
+      const u = underNote(m);
+      rec(u ? 'under' : 'delete', `Remove ${K(rk)} from the leaf, leaving ${NK(m.keys)}.${u}`, { [m.id]: u ? 'bad' : 'ok' });
+      n = m;
+    } else {
+      n.keys.splice(idx, 1);
+      const u = underNote(n);
+      rec(u ? 'under' : 'delete', `Remove ${K(k)} from the leaf, leaving ${NK(n.keys)}.${u}`, { [n.id]: u ? 'bad' : 'ok' });
+    }
+    fixUnderflow(path, n);
+    return true;
+  }
+
+  function deleteBPlus(k) {
+    const path = [];
+    let n = root;
+    while (!n.leaf) {
+      path.push(n);
+      const i = childIdx(n.keys, k);
+      rec('visit', `Delete ${K(k)}: at ${NK(n.keys)}, ${route(n.keys, k, i)}, so ${follow(n, i)}.`, { [n.id]: 'visit' });
+      n = n.children[i];
+    }
+    path.push(n);
+    const idx = n.keys.indexOf(k);
+    if (idx < 0) {
+      rec('miss', `${K(k)} is not in the leaf ${NK(n.keys)}, so it is not in the tree. Nothing to delete.`, { [n.id]: 'bad' });
+      return false;
+    }
+    n.keys.splice(idx, 1);
+    const stale = path.some(x => !x.leaf && x.keys.includes(k));
+    const u = n !== root && n.keys.length < minLeaf();
+    rec(u ? 'under' : 'delete',
+      `Remove ${K(k)} from the leaf, leaving ${NK(n.keys)}.` +
+      (u ? ` Underflow: ${pl(n.keys.length, 'key')}, but a leaf needs at least ${minLeaf()}.` : '') +
+      (stale ? ` ${K(k)} still appears above as a separator. That is fine: separators only guide searches.` : ''),
+      { [n.id]: u ? 'bad' : 'ok' }, stale ? k : []);
+    fixUnderflow(path, n);
+    return true;
+  }
+
+  function fixUnderflow(path, n) {
+    let lvl = path.indexOf(n);
+    while (n !== root && n.keys.length < minOf(n)) {
+      const p = path[lvl - 1];
+      const ci = p.children.indexOf(n);
+      const ls = ci > 0 ? p.children[ci - 1] : null;
+      const rs = ci < p.children.length - 1 ? p.children[ci + 1] : null;
+      const leafBP = BP() && n.leaf;
+      const min = minOf(n);
+
+      if (ls && ls.keys.length > min) {
+        if (leafBP) {
+          const moved = ls.keys.pop();
+          n.keys.unshift(moved);
+          p.keys[ci - 1] = moved;
+          rec('borrow', `The left sibling leaf has a key to spare. Move ${K(moved)} into the underflowing leaf, giving ${NK(n.keys)}, and set the separator in the parent to ${K(moved)}.`, { [n.id]: 'ok', [ls.id]: 'split', [p.id]: 'visit' }, moved);
+        } else {
+          const sep = p.keys[ci - 1], moved = ls.keys[ls.keys.length - 1];
+          n.keys.unshift(sep);
+          p.keys[ci - 1] = ls.keys.pop();
+          if (!n.leaf) n.children.unshift(ls.children.pop());
+          rec('borrow', `The left sibling has a key to spare. Separator ${K(sep)} moves down into the underflowing node and ${K(moved)} moves up from the left sibling to take its place.`, { [n.id]: 'ok', [ls.id]: 'split', [p.id]: 'visit' }, [sep, moved]);
+        }
+        break;
+      }
+      if (rs && rs.keys.length > min) {
+        if (leafBP) {
+          const moved = rs.keys.shift();
+          n.keys.push(moved);
+          p.keys[ci] = rs.keys[0];
+          rec('borrow', `The right sibling leaf has a key to spare. Move ${K(moved)} into the underflowing leaf, giving ${NK(n.keys)}, and set the separator in the parent to ${K(rs.keys[0])}, the new first key of the right leaf.`, { [n.id]: 'ok', [rs.id]: 'split', [p.id]: 'visit' }, [moved, rs.keys[0]]);
+        } else {
+          const sep = p.keys[ci], moved = rs.keys[0];
+          n.keys.push(sep);
+          p.keys[ci] = rs.keys.shift();
+          if (!n.leaf) n.children.push(rs.children.shift());
+          rec('borrow', `The right sibling has a key to spare. Separator ${K(sep)} moves down into the underflowing node and ${K(moved)} moves up from the right sibling to take its place.`, { [n.id]: 'ok', [rs.id]: 'split', [p.id]: 'visit' }, [sep, moved]);
+        }
+        break;
+      }
+
+      let left, right, si, side;
+      if (ls) { left = ls; right = n; si = ci - 1; side = 'left'; }
+      else { left = n; right = rs; si = ci; side = 'right'; }
+      const sep = p.keys[si];
+      const lk = left.keys.slice(), rk = right.keys.slice();
+      if (leafBP) {
+        left.keys = [...left.keys, ...right.keys];
+      } else {
+        left.keys = [...left.keys, sep, ...right.keys];
+        left.children = left.children.concat(right.children);
+      }
+      p.keys.splice(si, 1);
+      p.children.splice(si + 1, 1);
+      const how = leafBP
+        ? `No sibling leaf can spare a key (each has only the minimum ${min}), so merge with the ${side} sibling: ${NK(lk)} + ${NK(rk)} = ${NK(left.keys)}. The separator ${K(sep)} is dropped from the parent and the leaf chain skips the removed leaf.`
+        : `No sibling can spare a key (each has only the minimum ${min}), so merge with the ${side} sibling: ${NK(lk)} + separator ${K(sep)} + ${NK(rk)} = ${NK(left.keys)}.`;
+
+      if (p === root && p.keys.length === 0) {
+        root = left;
+        rec('shrink', `${how} The root is now empty and is removed, so the height shrinks to ${heightOf(root)}.`, { [left.id]: 'split' }, sep);
+        break;
+      }
+      const pu = p !== root && p.keys.length < minK();
+      rec('merge', `${how}${pu ? ` The parent ${NK(p.keys)} now underflows (${pl(p.keys.length, 'key')}, minimum ${minK()}).` : ` The parent keeps ${NK(p.keys)}.`}`, { [left.id]: 'split', [p.id]: pu ? 'bad' : 'ok' }, sep);
+      n = p; lvl--;
+    }
+  }
+
+  function scanRange(lo, hi) {
+    if (lo > hi) [lo, hi] = [hi, lo];
+    const R = `[${lo}, ${hi}]`;
+    if (isEmpty()) { rec('miss', `The tree is empty, so the range scan ${R} returns nothing.`); return { keys: [], reads: 0 }; }
+    const got = [];
+    let reads = 0;
+    const inRange = x => x >= lo && x <= hi;
+    const returns = hit => hit.length ? `return ${hit.join(', ')}` : 'no keys in the range';
+
+    if (BP()) {
+      let n = root;
+      while (!n.leaf) {
+        reads++;
+        const i = childIdx(n.keys, lo);
+        rec('visit', `Range scan ${R}: find the first leaf that may hold ${lo}. At ${NK(n.keys)}, ${route(n.keys, lo, i)}, so ${follow(n, i)}.`, { [n.id]: 'visit' });
+        n = n.children[i];
+      }
+      const leaves = leafList(root);
+      let li = leaves.indexOf(n), prev = null;
+      const done = {};
+      for (;;) {
+        reads++;
+        const hit = n.keys.filter(inRange);
+        got.push(...hit);
+        const past = n.keys.some(x => x > hi), next = leaves[li + 1];
+        const why = past ? `It holds a key above ${hi}, so the scan stops.`
+          : next ? `Every key here is ≤ ${hi}, so follow the next-leaf link to the right.`
+          : 'This is the last leaf, so the scan stops.';
+        rec('scan', `Read leaf ${NK(n.keys)}: ${returns(hit)}. ${why}`, { ...done, [n.id]: 'visit' }, got.slice(), { link: prev ? [prev.id, n.id] : null, leafOnly: true });
+        done[n.id] = 'ok';
+        if (past || !next) break;
+        prev = n; n = next; li++;
+      }
+    } else {
+      let stop = false;
+      const walk = n => {
+        reads++;
+        if (n.leaf) {
+          const hit = n.keys.filter(inRange);
+          got.push(...hit);
+          if (n.keys.some(x => x > hi)) stop = true;
+          rec('scan', `Read leaf ${NK(n.keys)}: ${returns(hit)}.${stop ? ` It holds a key above ${hi}, so the scan stops.` : n === root ? '' : ' Go back up to the parent.'}`, { [n.id]: 'visit' }, got.slice());
+          return;
+        }
+        const first = lowerIdx(n.keys, lo);
+        rec('visit', `Range scan ${R}: read ${NK(n.keys)} and go down into child ${first + 1}, the first subtree that may hold keys ≥ ${lo}.`, { [n.id]: 'visit' }, got.slice());
+        for (let i = first; i <= n.keys.length; i++) {
+          walk(n.children[i]);
+          if (stop || i === n.keys.length) break;
+          const key = n.keys[i];
+          if (key > hi) {
+            stop = true;
+            rec('scan', `Back up in ${NK(n.keys)}: ${key} &gt; ${hi}, so the scan stops.`, { [n.id]: 'visit' }, got.slice());
+            break;
+          }
+          got.push(key);
+          rec('scan', `Back up in ${NK(n.keys)}: return ${key}, then go down into child ${i + 2}.`, { [n.id]: 'visit' }, got.slice());
+        }
+      };
+      walk(root);
+    }
+    rec('found',
+      `Range scan ${R} returned ${got.length ? got.join(', ') : 'no keys'} after reading ${pl(reads, 'node')}. ` +
+      (BP() ? 'The B+-tree goes down once, then walks the linked leaves.'
+            : 'The B-tree has to climb back up into internal nodes to continue; a B+-tree walks the linked leaves instead.'),
+      {}, got.slice(), { leafOnly: BP() });
+    return { keys: got, reads };
+  }
+
+  // ---------- operations ----------
+  function snapshot() { return { root: clone(root), order: order.slice(), M: S.M, mode: S.mode }; }
+  function pushHistory(s) { history.push(s); if (history.length > 200) history.shift(); }
+
+  function run(op, keys) {
+    stopPlay();
+    const snap = snapshot();
+    steps = [];
+    let done = 0, skipped = 0;
+    for (const k of keys) {
+      if (op === 'insert') { if (insertKey(k)) { order.push(k); done++; } else skipped++; }
+      else if (op === 'delete') { if (deleteKey(k)) { order = order.filter(x => x !== k); done++; } else skipped++; }
+      else { if (searchKey(k)) done++; else skipped++; }
+    }
+    if (op !== 'search' && done) pushHistory(snap);
+    let note;
+    if (op === 'insert') note = `Inserted ${pl(done, 'key')}.` + (skipped ? ` Skipped ${skipped} already in the tree.` : '');
+    else if (op === 'delete') note = `Deleted ${pl(done, 'key')}.` + (skipped ? ` ${skipped} not found.` : '');
+    else note = keys.length === 1 ? (done ? `Found ${keys[0]}.` : `${keys[0]} is not in the tree.`) : `Found ${done} of ${keys.length} keys.`;
+    setMsg(note, !done);
+    startSteps();
+  }
+
+  function runScan() {
+    const a = $('scanLo').value.trim(), b = $('scanHi').value.trim();
+    if (!/^-?\d+$/.test(a) || !/^-?\d+$/.test(b)) { setMsg('Enter two integers for the range scan, such as 5 and 17.', true); return; }
+    stopPlay();
+    steps = [];
+    const r = scanRange(parseInt(a, 10), parseInt(b, 10));
+    setMsg(`Range scan returned ${pl(r.keys.length, 'key')} after reading ${pl(r.reads, 'node')}.`, false);
+    startSteps();
+  }
+
+  function rebuild() {
+    const keys = order.slice();
+    root = mk(true);
+    recording = false;
+    for (const k of keys) insertKey(k);
+    recording = true;
+  }
+
+  function setOrder(m) {
+    stopPlay();
+    pushHistory(snapshot());
+    S.M = m;
+    rebuild();
+    steps = [];
+    rec('info', `Rebuilt as an order-${m} ${BP() ? 'B+-tree' : 'B-tree'} by re-inserting the ${pl(order.length, 'key')} in their original insertion order.`);
+    updateRules();
+    setMsg('');
+    startSteps();
+  }
+
+  function setMode(mode) {
+    if (mode === S.mode) return;
+    stopPlay();
+    pushHistory(snapshot());
+    S.mode = mode;
+    rebuild();
+    steps = [];
+    rec('info', BP()
+      ? `Rebuilt as an order-${S.M} B+-tree by re-inserting the ${pl(order.length, 'key')}. Every key now lives in a leaf, the leaves are linked left to right, and internal nodes only hold separator copies (shown in grey). Try a range scan.`
+      : `Rebuilt as an order-${S.M} B-tree by re-inserting the ${pl(order.length, 'key')}. Each key is stored exactly once, in a leaf or an internal node.`);
+    updateRules();
+    setMsg('');
+    startSteps();
+  }
+
+  function undo() {
+    if (!history.length) return;
+    stopPlay();
+    const s = history.pop();
+    root = s.root; order = s.order;
+    if (s.M !== S.M || s.mode !== S.mode) { S.M = s.M; S.mode = s.mode; updateRules(); }
+    steps = [];
+    rec('info', 'Undo: restored the tree as it was before the last change.');
+    setMsg('');
+    startSteps();
+  }
+
+  function clearTree() {
+    stopPlay();
+    if (order.length) pushHistory(snapshot());
+    root = mk(true); order = [];
+    steps = [];
+    rec('info', 'Cleared the tree. Insert some keys to start again.');
+    setMsg('');
+    startSteps();
+  }
+
+  function randomKeys(count) {
+    const present = new Set(order);
+    let hi = 99;
+    while (hi - present.size < count * 3) hi = hi * 10 + 9;
+    const out = new Set();
+    while (out.size < count) {
+      const x = 1 + Math.floor(Math.random() * hi);
+      if (!present.has(x)) out.add(x);
+    }
+    return [...out];
+  }
+
+  function parseKeys(s) {
+    const out = [];
+    for (const tok of s.split(/[\s,;]+/).filter(Boolean)) {
+      const r = tok.match(/^(-?\d+)\.\.(-?\d+)$/);
+      if (r) {
+        const a = +r[1], b = +r[2], st = a <= b ? 1 : -1;
+        if (Math.abs(b - a) > 500) throw new Error(`The range ${tok} is too long. Use at most 500 keys at a time.`);
+        for (let x = a; ; x += st) { out.push(x); if (x === b) break; }
+        continue;
+      }
+      if (!/^-?\d+$/.test(tok)) throw new Error(`"${tok}" is not an integer. Use numbers like 42, lists like 4 8 15, or ranges like 1..20.`);
+      out.push(parseInt(tok, 10));
+    }
+    if (out.length > 500) throw new Error('That is more than 500 keys. Enter fewer at a time.');
+    return out;
+  }
+
+  function fromInput(op) {
+    const el = $('keyInput');
+    let keys;
+    try { keys = parseKeys(el.value); } catch (e) { setMsg(e.message, true); return; }
+    if (!keys.length) { setMsg('Type one or more integers first.', true); el.focus(); return; }
+    run(op, keys);
+    el.value = '';
+    el.focus();
+  }
+
+  function setMsg(text, isErr) { const m = $('msg'); m.textContent = text; m.classList.toggle('err', !!isErr); }
+
+  // ---------- layout & drawing ----------
+  function layout(t) {
+    const GAP = BP() ? 34 : 14, SUBGAP = BP() ? 34 : 36;
+    const pos = new Map(), leafOrder = [];
+    let cursor = null, lastParent = null;
+    const slotsOf = n => S.showCap ? Math.max(maxK(), n.keys.length) : Math.max(1, n.keys.length);
+    (function place(n, depth, parentId) {
+      const slots = slotsOf(n), w = slots * SLOT;
+      let cx;
+      if (n.leaf) {
+        if (cursor === null) cursor = 0;
+        else cursor += (lastParent === parentId ? GAP : SUBGAP);
+        cx = cursor + w / 2; cursor += w; lastParent = parentId;
+        leafOrder.push(n.id);
+      } else {
+        n.children.forEach(c => place(c, depth + 1, n.id));
+        const f = pos.get(n.children[0].id), l = pos.get(n.children[n.children.length - 1].id);
+        cx = (f.cx + l.cx) / 2;
+      }
+      pos.set(n.id, { id: n.id, cx, y: depth * (H + VGAP), w, slots, keys: n.keys.slice(), leaf: n.leaf, children: n.children.map(c => c.id) });
+    })(t, 0, null);
+    pos.leafOrder = leafOrder;
+    return pos;
+  }
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const f1 = v => v.toFixed(1);
+  const DEFS = '<defs>' +
+    '<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="arrowhead" d="M0 0L10 5L0 10z"/></marker>' +
+    '<marker id="arrHot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="arrowhead hot" d="M0 0L10 5L0 10z"/></marker>' +
+    '</defs>';
+
+  function render(target, from, t, st) {
+    const items = [];
+    for (const [id, p] of target) {
+      const o = from && from.get(id);
+      items.push(o ? { ...p, cx: lerp(o.cx, p.cx, t), y: lerp(o.y, p.y, t), w: lerp(o.w, p.w, t), op: 1 }
+                   : { ...p, op: from ? t : 1 });
+    }
+    const byId = new Map(items.map(it => [it.id, it]));
+    if (from) for (const [id, o] of from) if (!target.has(id)) items.push({ ...o, op: 1 - t, gone: true, children: [] });
+
+    let minX = Infinity, maxX = -Infinity, maxY = 0;
+    for (const it of items) {
+      minX = Math.min(minX, it.cx - it.w / 2); maxX = Math.max(maxX, it.cx + it.w / 2); maxY = Math.max(maxY, it.y + H);
+    }
+    const hk = new Set(st.hk);
+    const empty = items.length === 1 && !items[0].keys.length && !items[0].gone;
+    let edges = '', links = '', nodes = '';
+
+    if (BP()) {
+      const lo = target.leafOrder;
+      for (let j = 0; j + 1 < lo.length; j++) {
+        const a = byId.get(lo[j]), b = byId.get(lo[j + 1]);
+        const hot = st.link && st.link[0] === a.id && st.link[1] === b.id;
+        const x1 = a.cx + a.w / 2 + 3, x2 = b.cx - b.w / 2 - 3;
+        links += `<path class="leaflink${hot ? ' hot' : ''}" opacity="${Math.min(a.op, b.op).toFixed(3)}" marker-end="url(#${hot ? 'arrHot' : 'arr'})" d="M${f1(x1)} ${f1(a.y + H / 2)} L${f1(x2)} ${f1(b.y + H / 2)}"/>`;
+      }
+    }
+
+    for (const it of items) {
+      const sw = it.w / it.slots, left = it.cx - it.w / 2;
+      if (!it.gone) it.children.forEach((cid, j) => {
+        const c = byId.get(cid); if (!c) return;
+        const x1 = left + j * sw, y1 = it.y + H, x2 = c.cx, y2 = c.y, my = (y1 + y2) / 2;
+        edges += `<path class="edge" opacity="${Math.min(it.op, c.op).toFixed(3)}" d="M${f1(x1)} ${f1(y1)} C${f1(x1)} ${f1(my)} ${f1(x2)} ${f1(my)} ${f1(x2)} ${f1(y2)}"/>`;
+      });
+      const cls = (!it.gone && st.hl[it.id]) ? ' s-' + st.hl[it.id] : '';
+      const sep = BP() && !it.leaf;
+      let g = `<g class="node${cls}" transform="translate(${f1(left)},${f1(it.y)})" opacity="${it.op.toFixed(3)}">`;
+      g += `<rect class="frame" x="0" y="0" width="${f1(it.w)}" height="${H}" rx="6"/>`;
+      for (let s = 0; s < it.slots; s++) {
+        const x = s * sw;
+        if (s < it.keys.length) {
+          const k = it.keys[s];
+          g += sep
+            ? `<g class="key sep${hk.has(k) && !st.leafOnly ? ' hk' : ''}"><title>Separator ${k} (a routing copy)</title>`
+            : `<g class="key${hk.has(k) ? ' hk' : ''}" data-key="${k}"><title>Click to delete ${k}</title>`;
+          g += `<rect class="bgk" x="${f1(x + 3)}" y="3" width="${f1(sw - 6)}" height="${H - 6}" rx="4"/>` +
+               `<text x="${f1(x + sw / 2)}" y="${H / 2}">${k}</text></g>`;
+        } else {
+          g += `<rect class="emptyslot" x="${f1(x + 4)}" y="4" width="${f1(sw - 8)}" height="${H - 8}" rx="3"/>`;
+        }
+        if (s > 0) g += `<line class="divider" x1="${f1(x)}" y1="0" x2="${f1(x)}" y2="${H}"/>`;
+      }
+      g += `<rect class="outline" x="0" y="0" width="${f1(it.w)}" height="${H}" rx="6"/>`;
+      if (!it.leaf && !it.gone) for (let j = 0; j <= it.keys.length; j++) g += `<circle class="ptr" cx="${f1(j * sw)}" cy="${H}" r="3.5"/>`;
+      g += '</g>';
+      nodes += g;
+    }
+    if (empty) {
+      const it = items[0];
+      nodes += `<text class="emptytree" x="${it.cx}" y="${H + 24}">empty tree</text>`;
+      maxY += 40;
+    }
+
+    const vbX = minX - PAD, vbW = (maxX - minX) + PAD * 2, vbH = maxY + PAD * 2;
+    const svg = $('svg');
+    svg.setAttribute('viewBox', `${f1(vbX)} ${-PAD} ${f1(vbW)} ${f1(vbH)}`);
+    const avail = Math.max(200, $('stage').clientWidth - 34);
+    const scale = Math.min(Math.max(avail / vbW, 0.45), 1.6) * S.zoom;
+    svg.style.width = f1(vbW * scale) + 'px';
+    svg.style.height = f1(vbH * scale) + 'px';
+    svg.innerHTML = DEFS + edges + links + nodes;
+  }
+
+  // ---------- step playback ----------
+  const TAGS = {
+    visit: ['Visit', 'visit'], insert: ['Insert', 'ok'], over: ['Overflow', 'bad'], split: ['Split', 'split'],
+    root: ['New root', 'split'], dup: ['Duplicate', 'bad'], found: ['Found', 'found'], miss: ['Not found', 'bad'],
+    replace: ['Replace', 'found'], delete: ['Remove', 'ok'], under: ['Underflow', 'bad'], borrow: ['Borrow', 'split'],
+    merge: ['Merge', 'split'], shrink: ['Root removed', 'split'], scan: ['Scan', 'found'], info: ['Info', 'info']
+  };
+  const tagHtml = kind => `<span class="tag t-${TAGS[kind][1]}">${TAGS[kind][0]}</span>`;
+
+  function renderLog() {
+    $('log').innerHTML = steps.map((s, i) =>
+      `<li data-i="${i}" tabindex="0"><span class="n">${i + 1}</span>${tagHtml(s.kind)}<span>${s.msg}</span></li>`).join('');
+  }
+
+  function startSteps() {
+    renderLog();
+    if (S.animate && steps.length > 1) {
+      showStep(0);
+      playing = true; updatePlayBtn(); schedule();
+    } else {
+      showStep(steps.length - 1);
+    }
+  }
+
+  function showStep(i, animate = true) {
+    i = Math.max(0, Math.min(steps.length - 1, i));
+    cur = i;
+    const st = steps[i];
+    const target = layout(st.tree);
+    const from = shownPos;
+    cancelAnimationFrame(rafId);
+    updateChrome(st);
+    const dur = (!animate || !from || reduceMotion.matches) ? 0 : Math.min(450, S.speed * 0.55);
+    shownPos = target;
+    if (!dur) { render(target, null, 1, st); return; }
+    const t0 = performance.now();
+    const tick = now => {
+      const t = Math.min(1, (now - t0) / dur);
+      const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      render(target, from, e, st);
+      if (t < 1) rafId = requestAnimationFrame(tick);
+    };
+    render(target, from, 0, st);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function redraw() { if (steps.length) { shownPos = layout(steps[cur].tree); render(shownPos, null, 1, steps[cur]); } }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (!playing) return;
+    if (cur >= steps.length - 1) { playing = false; updatePlayBtn(); return; }
+    timer = setTimeout(() => { showStep(cur + 1); schedule(); }, S.speed);
+  }
+  function stopPlay() { playing = false; clearTimeout(timer); updatePlayBtn(); }
+  function togglePlay() {
+    if (playing) { stopPlay(); return; }
+    if (cur >= steps.length - 1) showStep(0);
+    playing = true; updatePlayBtn(); schedule();
+  }
+  function go(i) { stopPlay(); showStep(i); }
+
+  function updatePlayBtn() {
+    const b = $('playBtn');
+    b.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    b.innerHTML = playing
+      ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg>';
+    b.disabled = steps.length < 2;
+  }
+
+  function updateChrome(st) {
+    $('caption').innerHTML = tagHtml(st.kind) + st.msg;
+    $('counter').textContent = `Step ${cur + 1} of ${steps.length}`;
+    $('firstBtn').disabled = $('prevBtn').disabled = cur === 0;
+    $('nextBtn').disabled = $('lastBtn').disabled = cur >= steps.length - 1;
+    updatePlayBtn();
+    $('undoBtn').disabled = !history.length;
+
+    const log = $('log');
+    log.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
+    const li = log.children[cur];
+    if (li) {
+      li.classList.add('active');
+      const box = $('logBox');
+      if (li.offsetTop < box.scrollTop || li.offsetTop + li.offsetHeight > box.scrollTop + box.clientHeight)
+        box.scrollTop = li.offsetTop - box.clientHeight / 2;
+    }
+
+    let nAll = 0, nn = 0;
+    const ino = [];
+    (function walk(n) {
+      nn++; nAll += n.keys.length;
+      if (n.leaf) { ino.push(...n.keys); return; }
+      n.children.forEach((c, j) => { walk(c); if (j < n.keys.length && !BP()) ino.push(n.keys[j]); });
+    })(st.tree);
+    $('stKeys').textContent = ino.length;
+    $('stNodes').textContent = nAll ? nn : 0;
+    $('stHeight').textContent = heightOf(st.tree);
+    $('stFill').textContent = nAll ? Math.round(100 * nAll / (nn * maxK())) + '%' : '–';
+    if (BP()) {
+      $('inorderLabel').textContent = 'Leaf chain:';
+      $('inorder').textContent = ino.length ? leafList(st.tree).map(l => '[' + l.keys.join(' ') + ']').join(' → ') : '(empty)';
+    } else {
+      $('inorderLabel').textContent = 'In-order traversal:';
+      $('inorder').textContent = ino.length ? ino.join(' ') : '(empty)';
+    }
+  }
+
+  function updateRules() {
+    const m = S.M, bp = BP();
+    $('rules').innerHTML = bp
+      ? `B+-tree of order <b>m = ${m}</b>. Internal nodes hold at most <b>${m - 1}</b> separator keys and <b>${m}</b> children, ` +
+        `and except for the root at least <b>${minK()}</b> ${minK() === 1 ? 'key' : 'keys'} and <b>${minK() + 1}</b> children. ` +
+        `All keys live in the leaves, which hold <b>${minLeaf()}</b> to <b>${m - 1}</b> keys, sit at the same depth and are linked left to right.`
+      : `B-tree of order <b>m = ${m}</b>. Every node holds at most <b>${m - 1}</b> keys and <b>${m}</b> children. ` +
+        `Every node except the root holds at least <b>${minK()}</b> ${minK() === 1 ? 'key' : 'keys'} and <b>${minK() + 1}</b> children. ` +
+        `All leaves sit at the same depth.`;
+    $('orderHint').textContent = bp ? '' : m === 3 ? 'm = 3 is a 2-3 tree.' : m === 4 ? 'm = 4 is a 2-3-4 tree.' : '';
+    $('biasField').hidden = !bp && m % 2 === 1;
+    $('replField').hidden = bp;
+    $('legendLink').hidden = !bp;
+    $('modeB').setAttribute('aria-pressed', String(!bp));
+    $('modeBP').setAttribute('aria-pressed', String(bp));
+    $('orderSel').value = String(m);
+    $('keyHint').textContent = bp
+      ? 'Enter inserts, Shift+Enter deletes. Click any leaf key to delete it.'
+      : 'Enter inserts, Shift+Enter deletes. Click any key in the tree to delete it.';
+  }
+
+  // ---------- wiring ----------
+  const sel = $('orderSel');
+  for (let m = 3; m <= 10; m++) sel.insertAdjacentHTML('beforeend', `<option value="${m}">${m}  (max ${m - 1} keys per node)</option>`);
+  sel.value = String(S.M);
+  sel.addEventListener('change', () => setOrder(+sel.value));
+  $('modeB').addEventListener('click', () => setMode('b'));
+  $('modeBP').addEventListener('click', () => setMode('bplus'));
+  $('biasSel').addEventListener('change', e => { S.bias = e.target.value; });
+  $('replSel').addEventListener('change', e => { S.repl = e.target.value; });
+  $('capChk').addEventListener('change', e => { S.showCap = e.target.checked; redraw(); });
+  $('animChk').addEventListener('change', e => { S.animate = e.target.checked; if (!S.animate) stopPlay(); });
+  $('speed').addEventListener('input', e => { S.speed = +e.target.value; $('speedOut').textContent = (S.speed / 1000).toFixed(1) + ' s'; });
+  $('zoom').addEventListener('input', e => { S.zoom = +e.target.value / 100; $('zoomOut').textContent = e.target.value + '%'; redraw(); });
+
+  $('insBtn').addEventListener('click', () => fromInput('insert'));
+  $('delBtn').addEventListener('click', () => fromInput('delete'));
+  $('findBtn').addEventListener('click', () => fromInput('search'));
+  $('keyInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); fromInput(e.shiftKey ? 'delete' : 'insert'); }
+  });
+  $('scanBtn').addEventListener('click', runScan);
+  ['scanLo', 'scanHi'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runScan(); } }));
+  $('rnd1').addEventListener('click', () => run('insert', randomKeys(1)));
+  $('rnd10').addEventListener('click', () => run('insert', randomKeys(10)));
+  $('undoBtn').addEventListener('click', undo);
+  $('clearBtn').addEventListener('click', clearTree);
+
+  $('firstBtn').addEventListener('click', () => go(0));
+  $('prevBtn').addEventListener('click', () => go(cur - 1));
+  $('nextBtn').addEventListener('click', () => go(cur + 1));
+  $('lastBtn').addEventListener('click', () => go(steps.length - 1));
+  $('playBtn').addEventListener('click', togglePlay);
+
+  $('log').addEventListener('click', e => { const li = e.target.closest('li'); if (li) go(+li.dataset.i); });
+  $('log').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('li'); if (li) { e.preventDefault(); go(+li.dataset.i); } }
+  });
+  $('svg').addEventListener('click', e => {
+    const g = e.target.closest('.key[data-key]');
+    if (g) run('delete', [+g.dataset.key]);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, select, textarea, button, li')) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); }
+    else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+  });
+
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(redraw, 80); });
+
+  // theme toggle
+  const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => {
+    const a = document.documentElement.getAttribute('data-theme');
+    return a ? a === 'dark' : darkMQ.matches;
+  };
+  const syncThemeBtn = () => { $('themeBtn').textContent = isDark() ? 'Light mode' : 'Dark mode'; };
+  try { const saved = localStorage.getItem('btree-theme'); if (saved) document.documentElement.setAttribute('data-theme', saved); } catch (e) {}
+  $('themeBtn').addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('btree-theme', next); } catch (e) {}
+    syncThemeBtn();
+  });
+  darkMQ.addEventListener && darkMQ.addEventListener('change', syncThemeBtn);
+  syncThemeBtn();
+
+  // initial sample tree
+  root = mk(true);
+  recording = false;
+  for (const k of SAMPLE) { insertKey(k); order.push(k); }
+  recording = true;
+  rec('info', `Sample order-4 tree built by inserting ${SAMPLE.join(', ')}. Insert, delete or search keys on the left, or click a key in the tree to delete it. Switch to B+-tree to see linked leaves and try the range scan.`);
+  updateRules();
+  startSteps();
+})();
+</script>
+</body>
+</html>
