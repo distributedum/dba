@@ -32,13 +32,13 @@ Submitted projects must be fully authored by the students and must not contain m
 
 | # | Date       | Topic | Mat.       | Read |
 |:-:|:----------:|:------|:------:|:-------:|
-| T1 | 24/9/26 | Introduction. |  [&#128462;](materials/00-intro.pdf) | B2
+| T1 | 24/9/26 | Introduction. |  [pdf](materials/00-intro.pdf) | B2
 | PL1 |   | Lab 0: Benchmark. | [pdf](materials/lab0.pdf) [zip](materials/skelbench0.zip)  |
-| T1 | 1/10/26 | Physical representation. |  [&#128462;](materials/01-relational.pdf) | B1 13
+| T1 | 1/10/26 | Physical representation. |  [pdf](materials/01-relational.pdf) | B1 13
 | PL2 |   | Lab 1: Resources. | [pdf](materials/lab1.pdf) [zip](materials/skelbench.zip)  |
-| T3 | 8/10/26   | Physical operators. | [&#128462;](materials/02-relational.pdf) | B1 15 |
+| T3 | 8/10/26   | Physical operators. | [pdf](materials/02-relational.pdf) | B1 15 |
 | PL3 |   | Lab 2: Execution. | [pdf](materials/lab2.pdf) [zip](materials/lab2.zip)  |
-| T4 | 15/10/25   | Redundancy. | [&#128462;](materials/03-relational.pdf) [(D)](materials/btree.html) | B1 8,14 |
+| T4 | 15/10/25   | Redundancy. | [pdf](materials/03-relational.pdf) [demo](materials/btree.html) | B1 8,14 |
 | PL4 |   | Lab 3: Redundancy. | [pdf](materials/lab3.pdf) [zip](https://storage.googleapis.com/abd_data/embedding.zip)  |
 
 ## Bibliography
