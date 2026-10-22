@@ -38,8 +38,11 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL2 |   | Lab 1: Resources. | [pdf](materials/lab1.pdf) [zip](materials/skelbench.zip)  |
 | T3 | 8/10/26   | Physical operators. | [pdf](materials/02-relational.pdf) | B1 15 |
 | PL3 |   | Lab 2: Execution. | [pdf](materials/lab2.pdf) [zip](materials/lab2.zip)  |
-| T4 | 15/10/25   | Redundancy. | [pdf](materials/03-relational.pdf) [demo](materials/btree.html) | B1 8,14 |
+| T4 | 15/10/26   | Redundancy. | [pdf](materials/03-relational.pdf) [demo](materials/btree.html) | B1 8,14 |
 | PL4 |   | Lab 3: Redundancy. | [pdf](materials/lab3.pdf) [zip](https://storage.googleapis.com/abd_data/embedding.zip)  |
+| T5 | 22/10/26 | Execution. | [pdf](materials/04-relational.pdf) [zip](materials/exec.zip) | B1 15; P2 |
+| T6 |  | Cost estimation. | [pdf](materials/06-relational.pdf) | B1 16; B3 5; P3 |
+| T7 |  | Optimization. | [pdf](materials/07-relational.pdf) [demo](materials/queryopt.html) | B1 16; B3 2,4 |
 
 ## Bibliography
 
@@ -58,8 +61,3 @@ Submitted projects must be fully authored by the students and must not contain m
 
 - [2025/2026](editions/2025_2026/)
 - [2024/2025](editions/2024_2025/)
-
-
-## Google Cloud Credits Link
-
-https://docs.google.com/spreadsheets/d/1yoNJEWmqPgq5GT7WgW3w-rTjDoEH4WK4f6Mb5Zqpyo4/edit?usp=sharing

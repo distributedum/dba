@@ -1,0 +1,1824 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Query Optimizer Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: control rail on the left; on the right the query, the step narration, the plan or memo stage, and the moves/derivation panels */
+:root {
+  --bg: #ffffff; --panel: #ffffff; --ink: #222222; --muted: #6f6f6f; --line: #e5e5e5;
+  --box: #ececec; --accent: #267cb9; --accent-hover: #006699; --on-accent: #ffffff;
+  --node: #ffffff; --node-stroke: #444444; --slot-empty: #eff1f3; --edge: #9aa0a6; --dot: rgba(0, 0, 0, .08);
+  --visit: #2a66c9; --visit-bg: #e2ebfa;
+  --ok: #1d8048; --ok-bg: #dcf1e3;
+  --bad: #c3362b; --bad-bg: #fbe1de;
+  --found: #a86400; --found-bg: #fcecc9;
+  --split: #7448bd; --split-bg: #ece4f9;
+  --font-display: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+    --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+    --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+    --visit: #7eaaf6; --visit-bg: #1b2943;
+    --ok: #5dca8b; --ok-bg: #163222;
+    --bad: #f27c70; --bad-bg: #3d1c19;
+    --found: #f2b74e; --found-bg: #3a2b0f;
+    --split: #b597f2; --split-bg: #2a2142;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+  --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+  --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+  --visit: #7eaaf6; --visit-bg: #1b2943;
+  --ok: #5dca8b; --ok-bg: #163222;
+  --bad: #f27c70; --bad-bg: #3d1c19;
+  --found: #f2b74e; --found-bg: #3a2b0f;
+  --split: #b597f2; --split-bg: #2a2142;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap {
+  max-width: 1680px; margin: 0 auto;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { display: flex; align-items: flex-start; gap: 20px; min-width: 0; }
+.brand .logo { margin-top: 4px; }
+.brand .logo { display: block; flex: none; background: #ffffff; border-radius: 4px; line-height: 0; }
+.brand .logo img { width: 96px; height: auto; display: block; }
+.course { margin: 0 0 4px; font-size: 14px; color: var(--muted); }
+.course a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.course a:hover, .course a:focus-visible { color: var(--accent-hover); text-decoration: underline; }
+@media (max-width: 560px) { .brand .logo img { width: 64px; } }
+footer.credit { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }
+footer.credit a { color: var(--accent); text-decoration: none; }
+footer.credit a:hover { text-decoration: underline; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.rules { margin: 6px 0 0; color: var(--muted); max-width: 95ch; }
+.rules b { color: var(--ink); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.controls { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; }
+label { font-weight: 500; font-size: 14px; }
+input:focus-visible, button:focus-visible, select:focus-visible, #log li:focus-visible, #deriv li:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btnrow > button { flex: 1 1 auto; }
+button { font: 500 14px var(--font-body); padding: 9px 12px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
+button:disabled { opacity: .4; cursor: default; }
+.btnrow.small button { font-size: 13px; padding: 7px 8px; }
+
+select { font: 14px var(--font-body); padding: 7px 8px; border-radius: 7px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > label { display: flex; justify-content: space-between; gap: 8px; }
+output { font-family: var(--font-mono); color: var(--muted); font-size: 13px; font-weight: 400; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 400; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 8px; font-weight: 600; background: var(--panel); color: var(--muted); }
+.seg button + button { border-left: 1.5px solid var(--line); }
+.seg button[aria-pressed="true"], .seg button[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+.msg { margin: 0; font-size: 14px; min-height: 1.5em; color: var(--muted); }
+.msg.err { color: var(--bad); }
+#presetNote { font-size: 14px; color: var(--muted); margin: 0; }
+#presetNote b { color: var(--ink); font-weight: 600; }
+
+.rulelist { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.rulelist label { display: grid; grid-template-columns: 16px 1.4em minmax(0, 1fr); gap: 2px 8px; align-items: baseline; font-weight: 400; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.rulelist label:hover { background: var(--slot-empty); }
+.rulelist input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; align-self: center; }
+.rulelist .num { font: 12px var(--font-mono); color: var(--muted); text-align: right; }
+.rulelist .rn { font-size: 14px; font-weight: 500; }
+.rulelist .rf { grid-column: 3; font: 13px var(--font-mono); color: var(--muted); }
+.rulelist sub, .tx sub { font-size: .72em; }
+.scriptbox { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--box); padding-top: 12px; }
+#scriptNext { font-size: 13px; color: var(--muted); margin: 0; }
+
+.stats dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 8px; margin: 0; }
+.stats dl > div { display: flex; flex-direction: column; min-width: 0; }
+.stats dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.stats dd { margin: 0; font: 600 21px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.board { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.querybox { border: 1px solid var(--box); border-radius: 10px; padding: 12px 16px; display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 8px 28px; align-items: start; }
+@media (max-width: 1100px) { .querybox { grid-template-columns: minmax(0, 1fr); } }
+#sql { margin: 0; font: 500 14px/1.5 var(--font-mono); white-space: pre; overflow-x: auto; }
+#sql .kw { color: var(--accent); font-weight: 600; }
+.qinfo { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; min-width: 0; }
+.qinfo .row { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.qinfo .t { white-space: nowrap; }
+.qinfo .t b { font-family: var(--font-mono); font-weight: 600; }
+.qinfo .pl { font: 600 12.5px var(--font-mono); color: var(--muted); margin-right: 3px; }
+.qinfo .pt { font-family: var(--font-mono); }
+.qinfo .sel { color: var(--muted); }
+
+.stepbar { background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
+.stepnav { display: flex; gap: 4px; align-items: center; }
+.stepnav button { padding: 6px 8px; display: grid; place-items: center; }
+.stepnav svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+#playBtn { padding: 6px 12px; }
+#counter { font: 500 13px var(--font-mono); color: var(--muted); margin-left: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#caption { margin: 0; font-size: 18px; flex: 1 1 380px; min-width: 0; line-height: 1.45; }
+
+.stage {
+  background-color: transparent;
+  background-image: radial-gradient(var(--dot) 1.1px, transparent 1.4px);
+  background-size: 22px 22px;
+  border: 1px solid var(--box); border-radius: 10px;
+  min-height: 380px; overflow: auto; display: flex; padding: 16px;
+}
+#svg { margin: auto; display: block; flex: none; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+
+.work { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 410px); gap: 12px; align-items: start; }
+@media (max-width: 1300px) { .work { grid-template-columns: minmax(0, 1fr); } }
+.stagecol, .sidecol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel { border: 1px solid var(--box); border-radius: 10px; display: flex; flex-direction: column; min-width: 0; }
+.panelhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px 6px; flex-wrap: wrap; }
+.panelhead h3 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.panelbody { max-height: 280px; overflow: auto; padding: 2px 8px 10px; }
+.panelbody.moveslist { max-height: 480px; }
+.mini.seg { grid-template-columns: auto auto; }
+.mini.seg button { padding: 3px 10px; font-size: 12.5px; }
+.empty { color: var(--muted); font-size: 14px; margin: 6px 6px; }
+
+.moves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mv { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 12px; align-items: center; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; font-weight: 400; }
+.mv .mn { font-weight: 600; font-size: 14px; }
+.mv .mvar { color: var(--muted); font-size: 13px; }
+.mv .mat { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.mv .mat .tx { color: var(--ink); }
+.mv .mc { font: 500 14px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.mv .md { min-width: 4.8em; text-align: right; }
+.mv.off { opacity: .5; }
+.mv.blocked .mc { color: var(--bad); font: 400 12.5px var(--font-body); }
+.dl { display: inline-block; font: 600 12.5px var(--font-mono); padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.dl.down { color: var(--ok); background: var(--ok-bg); }
+.dl.up { color: var(--bad); background: var(--bad-bg); }
+.dl.eq { color: var(--muted); background: var(--bg); }
+.tx { font-family: var(--font-mono); font-size: .95em; }
+
+#deriv { list-style: none; margin: 0; padding: 0; }
+#deriv li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 2px 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer; align-items: baseline; font-size: 14px; }
+#deriv li:hover { background: var(--slot-empty); }
+#deriv li.active { background: var(--visit-bg); }
+#deriv .n { font: 12px var(--font-mono); color: var(--muted); text-align: right; }
+#deriv .c { font: 500 13.5px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+#deriv .loopnote { grid-column: 2 / 4; }
+#bestText { padding: 4px 6px; font-size: 14px; }
+#bestText p { margin: 0 0 6px; }
+#bestText .bl { position: relative; padding: 3px 0 3px 0; line-height: 1.35; }
+#bestText .bl .bn { font: 500 13.5px var(--font-mono); }
+#bestText .bl .bm { display: block; font-size: 12.5px; color: var(--muted); }
+#bestText .bl .bm b { font: 600 12px var(--font-mono); color: var(--ok); }
+
+.logbox { position: relative; max-height: 260px; overflow: auto; background: transparent; border: 1px solid var(--box); border-radius: 10px; }
+.loghead { margin: 0; padding: 10px 14px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+#log { list-style: none; margin: 0; padding: 4px 6px 8px; }
+#log li { display: grid; grid-template-columns: 2.2em 7.6em minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; align-items: baseline; font-size: 14px; }
+#log li:hover { background: var(--bg); }
+#log li.active { background: var(--visit-bg); }
+#log .n { font: 12px var(--font-mono); color: var(--muted); text-align: right; }
+#log .tag { justify-self: start; }
+
+.tag { display: inline-block; font: 600 11px/1.6 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; vertical-align: 2px; border: 1px solid currentColor; white-space: nowrap; }
+#caption .tag { margin-right: 6px; }
+.t-visit { color: var(--visit); background: var(--visit-bg); }
+.t-ok { color: var(--ok); background: var(--ok-bg); }
+.t-bad { color: var(--bad); background: var(--bad-bg); }
+.t-split { color: var(--split); background: var(--split-bg); }
+.t-found { color: var(--found); background: var(--found-bg); }
+.t-info { color: var(--muted); background: var(--bg); }
+.kc { font: 600 .95em var(--font-mono); background: var(--found-bg); color: var(--found); padding: 0 5px; border-radius: 4px; white-space: nowrap; }
+
+/* plan and memo drawing */
+#svg text { dominant-baseline: alphabetic; }
+#svg .frame { fill: var(--node); stroke: none; }
+#svg .outline { fill: none; stroke: var(--node-stroke); stroke-width: 1.5; }
+#svg .edge { stroke: var(--edge); stroke-width: 1.8; fill: none; }
+#svg .pnode { cursor: pointer; }
+#svg .pnode:hover .outline { stroke: var(--accent); stroke-width: 2.5; }
+#svg .head { font: 600 14px var(--font-body); fill: var(--ink); }
+#svg .head.xp { fill: var(--bad); }
+#svg .ln { font: 500 15px var(--font-mono); fill: var(--ink); }
+#svg .ln .pl, #svg .sub { fill: var(--muted); }
+#svg .ln .pl { font-size: 12.5px; font-weight: 600; }
+#svg .est { font: 12.5px var(--font-body); fill: var(--muted); }
+#svg .est.shown { fill: var(--ink); }
+#svg .s-visit .frame { fill: var(--visit-bg); } #svg .s-visit .outline { stroke: var(--visit); stroke-width: 3; }
+#svg .s-ok .frame { fill: var(--ok-bg); } #svg .s-ok .outline { stroke: var(--ok); stroke-width: 3; }
+#svg .s-bad .frame { fill: var(--bad-bg); } #svg .s-bad .outline { stroke: var(--bad); stroke-width: 3; }
+#svg .s-split .frame { fill: var(--split-bg); } #svg .s-split .outline { stroke: var(--split); stroke-width: 3; }
+#svg .s-found .frame { fill: var(--found-bg); } #svg .s-found .outline { stroke: var(--found); stroke-width: 3; }
+#svg .gbox .frame { fill: var(--node); }
+#svg .gbox .outline { stroke: var(--node-stroke); stroke-opacity: .55; }
+#svg .gtitle { font: 700 15px var(--font-mono); fill: var(--ink); }
+#svg .grows { font: 12.5px var(--font-body); fill: var(--muted); }
+#svg .gsub { font: 12.5px var(--font-mono); fill: var(--muted); }
+#svg .chip { cursor: pointer; }
+#svg .chip .frame { fill: var(--slot-empty); }
+#svg .chip .outline { stroke: transparent; stroke-width: 1.5; }
+#svg .chip:hover .outline { stroke: var(--accent); stroke-width: 2; }
+#svg .chip.s-visit .frame { fill: var(--visit-bg); } #svg .chip.s-visit .outline { stroke: var(--visit); stroke-width: 2.5; }
+#svg .chip.s-ok .frame { fill: var(--ok-bg); } #svg .chip.s-ok .outline { stroke: var(--ok); stroke-width: 2.5; }
+#svg .chip.s-bad .frame { fill: var(--bad-bg); } #svg .chip.s-bad .outline { stroke: var(--bad); stroke-width: 2.5; }
+#svg .chip.s-split .frame { fill: var(--split-bg); } #svg .chip.s-split .outline { stroke: var(--split); stroke-width: 2.5; }
+#svg .chip.s-found .frame { fill: var(--found-bg); } #svg .chip.s-found .outline { stroke: var(--found); stroke-width: 2.5; }
+#svg .gbox.s-visit .frame, #svg .gbox.s-ok .frame, #svg .gbox.s-split .frame, #svg .gbox.s-found .frame, #svg .gbox.s-bad .frame { fill: var(--node); }
+#svg .gbox.s-visit .outline, #svg .gbox.s-ok .outline, #svg .gbox.s-split .outline, #svg .gbox.s-found .outline, #svg .gbox.s-bad .outline { stroke-opacity: 1; }
+#svg .gbox.s-visit .outline { stroke: var(--visit); } #svg .gbox.s-ok .outline { stroke: var(--ok); } #svg .gbox.s-split .outline { stroke: var(--split); }
+#svg .gbox.s-found .outline { stroke: var(--found); } #svg .gbox.s-bad .outline { stroke: var(--bad); }
+#svg .cid { font: 500 12px var(--font-mono); fill: var(--muted); }
+#svg .ctext { font: 500 14.5px var(--font-mono); fill: var(--ink); }
+#svg .ctext .sub { font-size: 11px; }
+#svg .ctext .xp { fill: var(--bad); }
+#svg .cside { font: 11.5px var(--font-body); fill: var(--muted); text-anchor: end; }
+#svg .cside.win { fill: var(--ok); font-weight: 700; }
+#svg .link { fill: none; stroke-width: 2.2; }
+#svg .l-found { stroke: var(--found); } #svg .l-visit { stroke: var(--visit); } #svg .l-ok { stroke: var(--ok); }
+#svg .l-split { stroke: var(--split); } #svg .l-bad { stroke: var(--bad); }
+#svg .ldot { stroke: none; }
+#svg .ldot.l-found { fill: var(--found); } #svg .ldot.l-visit { fill: var(--visit); } #svg .ldot.l-ok { fill: var(--ok); }
+#svg .ldot.l-split { fill: var(--split); } #svg .ldot.l-bad { fill: var(--bad); }
+#svg .rowlabel { font: 600 11.5px var(--font-body); fill: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <a class="logo" href="https://distributedum.github.io/dba/" title="Database Administration course page"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaUAAAFICAMAAADH1hHAAAAA0mVYSWZJSSoACAAAAAoAAAEEAAEAAAClAQAAAQEEAAEAAABIAQAAAgEDAAMAAACGAAAAEgEDAAEAAAABAAAAGgEFAAEAAACMAAAAGwEFAAEAAACUAAAAKAEDAAEAAAACAAAAMQECAA8AAACcAAAAMgECABQAAACsAAAAaYcEAAEAAADAAAAAAAAAAAgACAAIAEgAAAABAAAASAAAAAEAAABHSU1QIDMuMC4wLVJDMgAAMjAyNTowMToxOCAyMDo1NDoyMAABAAGgAwABAAAAAQAAAAAAAACGG2U6AAABfmlDQ1BJQ0MgcHJvZmlsZQAAeJx9kTtIA0EURc9uFEWUgKYQsdhCrbTxh2AToxCECCEqJGrhfkwMZDdhN8EmpWAbsPDTGLWwsdbWwlYQBD8g9oKVoo2ElckGEsT4mjncefcx7w7I5YxuOi1BMK28HQuHlHhiRWl7RaKbABNMq7qTm4lGIzStr3skcd6NiFnN+/6sLmPD0UFSgKCes/MgrQOTW/mc4H0goG+qBkjnwLAdT6yA9Ch0zeM3wakqy2JmwF6KzYIcAJRUA2sNrG/aJsjjwIBhWgbIcY8NwUXBZqag194pNuzcsJYXhQ70E2aeBaIoaBRIkyHPCGksFBxihAk18fdV/VEKaGRIo6MwRxYTtepH/MHvbJ3k2Kg3qTMErS+u+zEIbbtQKbnu97HrVk7A9wxXVt2fLcPUJ/hKdW3gCPzbcHFd17Q9uNyB3qecaqtVyQfIySS8n0FXAnpuoWPVy612z+kDLBUhcgMHhzCUAv9ak73bG3P7t6eW3w8ZKnLpf5uDuAAADXppVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+Cjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDQuNC4wLUV4aXYyIj4KIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIgogICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgIHhtbG5zOkdJTVA9Imh0dHA6Ly93d3cuZ2ltcC5vcmcveG1wLyIKICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIgogICB4bXBNTTpEb2N1bWVudElEPSJnaW1wOmRvY2lkOmdpbXA6OTNiMzc4ZTgtN2EzYS00YzFmLWI0ZDEtZWVjYjI1NDk2M2JiIgogICB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjdjM2JmNjgyLTEyOWItNDIxZS04NTg3LThmYjRkOTczMTc2OSIKICAgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ4bXAuZGlkOjk2MjYzYjQyLTU3N2EtNDg4MC1iNGE2LWE0ZTljNjdlNTY2NiIKICAgZGM6Rm9ybWF0PSJpbWFnZS9wbmciCiAgIEdJTVA6QVBJPSIzLjAiCiAgIEdJTVA6UGxhdGZvcm09IkxpbnV4IgogICBHSU1QOlRpbWVTdGFtcD0iMTczNzIzMzY2MjQxMjM1MyIKICAgR0lNUDpWZXJzaW9uPSIzLjAuMC1SQzIiCiAgIHRpZmY6T3JpZW50YXRpb249IjEiCiAgIHhtcDpDcmVhdG9yVG9vbD0iR0lNUCIKICAgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNTowMToxOFQyMDo1NDoyMCswMDowMCIKICAgeG1wOk1vZGlmeURhdGU9IjIwMjU6MDE6MThUMjA6NTQ6MjArMDA6MDAiPgogICA8eG1wTU06SGlzdG9yeT4KICAgIDxyZGY6U2VxPgogICAgIDxyZGY6bGkKICAgICAgc3RFdnQ6YWN0aW9uPSJzYXZlZCIKICAgICAgc3RFdnQ6Y2hhbmdlZD0iLyIKICAgICAgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDoxODM0ODVhMy05ZjdmLTQ0MWQtYjc5ZC1hNjA2NzRjYzQxZjciCiAgICAgIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkdJTVAgMy4wLjAtUkMyIChMaW51eCkiCiAgICAgIHN0RXZ0OndoZW49IjIwMjUtMDEtMThUMjA6NTQ6MjIrMDA6MDAiLz4KICAgIDwvcmRmOlNlcT4KICAgPC94bXBNTTpIaXN0b3J5PgogIDwvcmRmOkRlc2NyaXB0aW9uPgogPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgIAo8P3hwYWNrZXQgZW5kPSJ3Ij8+RU8QCAAAAwBQTFRFAAAAAQEBAgICAwMDBAQEBQUFBgYGBwcHCAgICQkJCgoKCwsLDAwMDQ0NDg4ODw8PEBAQEREREhISExMTFBQUFRUVFhYWFxcXGBgYGRkZGhoaGxsbHBwcHR0dHh4eHx8fICAgISEhIiIiIyMjJCQkJSUlJiYmJycnKCgoKSkpKioqKysrLCwsLS0tLi4uLy8vMDAwMTExMjIyMzMzNDQ0NTU1NjY2Nzc3ODg4OTk5Ojo6Ozs7PDw8PT09Pj4+Pz8/QEBAQUFBQkJCQ0NDRERERUVFRkZGR0dHSEhISUlJSkpKS0tLTExMTU1NTk5OT09PUFBQUVFRUlJSU1NTVFRUVVVVVlZWV1dXWFhYWVlZWlpaW1tbXFxcXV1dXl5eX19fYGBgYWFhYmJiY2NjZGRkZWVlZmZmZ2dnaGhoaWlpampqa2trbGxsbW1tbm5ub29vcHBwcXFxcnJyc3NzdHR0dXV1dnZ2d3d3eHh4eXl5enp6e3t7fHx8fX19fn5+f39/gICAgYGBgoKCg4ODhISEhYWFhoaGh4eHiIiIiYmJioqKi4uLjIyMjY2Njo6Oj4+PkJCQkZGRkpKSk5OTlJSUlZWVlpaWl5eXmJiYmZmZmpqam5ubnJycnZ2dnp6en5+foKCgoaGhoqKio6OjpKSkpaWlpqamp6enqKioqampqqqqq6urrKysra2trq6ur6+vsLCwsbGxsrKys7OztLS0tbW1tra2t7e3uLi4ubm5urq6u7u7vLy8vb29vr6+v7+/wMDAwcHBwsLCw8PDxMTExcXFxsbGx8fHyMjIycnJysrKy8vLzMzMzc3Nzs7Oz8/P0NDQ0dHR0tLS09PT1NTU1dXV1tbW19fX2NjY2dnZ2tra29vb3Nzc3d3d3t7e39/f4ODg4eHh4uLi4+Pj5OTk5eXl5ubm5+fn6Ojo6enp6urq6+vr7Ozs7e3t7u7u7+/v8PDw8fHx8vLy8/Pz9PT09fX19vb29/f3+Pj4+fn5+vr6+/v7/Pz8/f39/v7+////4rBdfQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+kBEhQ2FlwIecYAAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAPt0lEQVR42u2dMXejOhbH6fA5W+CSFLhwirjZ16cjjdNsqu2cajvotstUM11e9VKOu5ePMK+Lu+cSSvIRTLkt1CwgIV2BZAO2M86Z/3/PznNsCcT9ca+uhAArtKDLFyiBEnQaBTABKEGghH4Jgi9B8CX4EgRKECihX4LgS/AlCL4EgRIiHgRKECIeKEGIeBB8CZQgUEK/BMGXIFBCxIPgSxB8Cb4EgRKEiAdfgkAJEQ+CL0GgBErQr0Npvi6KdDWBtS+Y0uS9qJUtYe7LpfRSNLqFvS81E58LSEUKe18qpVRSKq5h8AuNeARSgYzyQik5oPQJIp4HSqCEiAdKoARdEKUZKH22fglXsz5DxAMl5HigBEq/TvaAiIdMHJTgS8jxIEQ8UIIvYe4Bgi/BlzDbiuwBlOBLyB4gUELEs06wHg+UPsiX7FUUracDKrwTSqv+1ZwvefqGtbDjfGme1+ZeO71rfCeU7N6MXlmFFxAa4Uu3wuDPfS0+yWSdvv4a5k0VYBruS04u/SJ76FnJzQda/BY3ABxFKaCpQJHO+9X6bVuVznu6rbtVdrIFo6ERLylUpX7ffNzrmXDYv7d2UbiANNCXio6285M25y7v7MEDpGG+NCk0GpDuHdL1u2b7oHS8Lw3ocA5putZufgpIA/ulZ60di/QUtzWHuXbbb2A0eFSb6DEV26sj23G70284uwKjwZQcE6ZibR/RCmdr2OoOGd6YGaLJ2oQpG909TZ5Pvslf/srF1HTeF7tx3ZOfGbb36oDP+OtL17vidN3T3BRDd3PQOe4q4ENu7J6GPRPKMQXQHMHu+KuAtqkrKfKHIXvPTwMblAZ3T30nYdW5b6oEwe5k6x6mxnSvl5WvTYwyH1hOue7B2PMXr9PRrhjaoHLiNUS+MY3Yey3X3K1tMW13hpVedlgMz9KMKeIOzzk803q8ZiGJJo3wh3VIyL7PuR7v2tg9ba8HdEjfMdVw3lWTe7onq9e1D2TfH7ECeWLsntSFQz9M2fcDUHzECmRj93RPzwmTx2Gq4aPWiRuyglyWcA29Fy4ifeRqfn2GLZMCf0AmCJ3tngvtaFUuAnrS/Bog2H38nTGaa+Punm5pi+z759xl1p7pziz9HWdDZs9B6Qz+mRnuLJsoP+S4y/an3rFpk2saCZ11XZ5nTSz6pXESN07krv79MQnueLmE+2pvN/X8afv6xbJO1hNk35f9jk3b8zzEOrwJFREPAiUIEQ+UIFACpY/ZzQzZ96VnD+wybn4Pa18wpasMT6u5+IjnZHjw2uVTIvPjGZaA/9SI59m9nhFhfD6e62GFypl9af6+b5FJj6fr1tc5UqwRP6MviduYXsY+t/U+wyKI81Kyw6zY+8TBw5R8LCg69/1Lyu3q16Oe+r7DrTFn9aX2zRbrMb60wNqvc/pSd2X4bgylTWcdJfL1k/mSdhnrGEpxd00yVq6ciJJ2SXg+pl+K8GybM1Hy+z/L7iClhf4+DHA6ktLccNNl7o7KxA1PNUL3dEz2YHx0UHE/7k2obo4b1k9MyTY+Oihfjn1Llp3g4Q8npeSanzXpHPFmH9MDILIlCA2n5JgcyfxY8X7vX7JNYRSYhmcPhjucd7519HsB54ZndeAWp6GUJiMeedL/XWb6Hg9Pqh5KyRvxwMEBb5zTPgl5B0bHUzo4+hz0XkDdU8XBaGD24Ix4rOSwtzdOgs4uwGhojpcOf0Tr0Hdstl6/hH5peI73qJh8cp53P6uThMjxho9qnwe/eGnE+2rpRRGstBwzQ/RqfPDdKd+jLqY4AGncnPhdFEVv87O/7f4xwSOKPnCdON7Q/eko4f5QUEL2MFozRDz4EijBl36ZiAdfQr8ESmegBF9C9gBfwtwDsgcIvoR+CZRACUK/BF+CL2G8hIgHX0K/BKFfAiX4EiIehOwBEe+Q4EufgRK9X9qHwS//ua05HrRxsc9AztEtfYLniYtno+AGiot+Nv86H3QzDfST3nOBt8zhLVmgBIEShLdkgRKEiAfBl+BLECiBEgRKELIH+BIEX4LgS6AEgRKEfgmUIFACJQjZAwRKoAShX4JACREPgi9B8CX4EgRfAiUIlCD0S/AlCL4EHdCPIAiDSmHI/8/+5l/yr9hP5T+h+FmUDdlPdRFWuCnBSom/gkBsOAxZLVa53ir/h9Zhf4StffFyvElioyHdrWwvb5ncT3Ogyr7kZkN60GKHgTg6oaZSc2Btq4WhOOhQNDAkhhKHHBJbiXYG5NvAKqDLFyiBEgRKoASBEgRKoASBEgRKoASBEihBoASBEihBoASBEihBoASBEihBoARKEChBoARKEChBoARKEChBoARKECiBEgRKECiBEgRKECiBEgRKECiBEgRKoASBEgRKoASBEgRKoASBEgRKoASBEihBoASBEihBoASBEihBoASBEihBoARKEChBoARKEChBoARKEChBoARKECiBEgRKECiBEgRKECiBEgRKEKGUBkEQBuE39kUQhtWf5hp/VQWCbydtxdewVGeb5Vfl17s+G6gOIAj+GrbXuk7wo0fJNGQ2Kv/3hX/1o/qi3kD4tfr7W93ar/vMVhb+OppSZNXy+BdMewxCS59InnabrCVRr8OoFQ489t6VYksqp2aQ7fYOmOUos0lKs89PKRhDqU+liFDa0CZ/OCUPlHpR4uXtD6YU/3xKs58Y8YZSYq1MrYGUQvjSMb4UDqTETPNmXXa/9IH556X5kicbVBv9H1Z/0wfUyOf3pY+mFF9Ojue51b9PwnWCwZTO0C9lURxHUXXqJCvPcV/52KH8Lo6SIqn+G3MbVp+iKGMF1gtvNlttNHt7u/GS+sPfwc3MWzw1Y6EkYttk2vkT19+2KeVvK6+Uv07JBrOH8pu/O24RBWXJm6dUf8x5VWnbqVS2e8J+MFGaLap/b6pvptWnv4nlkrhSolRLnmbe7LVNKQ692SJRinmW56124yjxH4rUZx+ulN090YNkn6uzrClsWfaDcohR8e7weLFzmzJuQvolHg7u2U/XmUKJjE+c16b1L2pR7hZbp7V5VUv22zxTKL2LNtmhKeLN6hTAbpIHN+70SzNitvyBN0IxW8Ib9yCOweke1xBKvG2JSDpDuruUVOObKM+Gd5KhWktKKWbbKSklpIz93qZ0K0xMKGUu7b+tF9bW31tFmcH/SwpOupja22dM/ui2WxPxNswgRVF/8GPSo8vsoTHbVbO578RsgdgPd50HzXGN8aVWMiNSSnaU1ZnF/ao8afKJUiGkvmRzl1ItvmglSC/tndaUFup3dn2Ir+2iNaWtWjJrHbC+UmuvS0PEY+635jZfx9ocr2M2R5qNyKeB4wCmHr7USkIFJR7yqrOVRblVUay4bbyJPGH49oMm8H1nhojeWJlMOcTM0lHaNafJnS1Nm03bRauTIuMBZDqjxpAdmaOtxJvrNuf/Vu9LxRXfZN3gNOpHyUrViE2M2ZxSHm/WJB/tS7ebjS2JCErcdOWZxRpf/erwkN+cJH6n1XFxU3PMa7ZTr04n5CFuOObHzS2hFAjbpbbYbjNkWb3dEoOv2cdyDjV1aWThara/2tBKfPt/lGZj27/WZ+LsLHTYzMOkiLT9UnNy37492nIw0VBaRQEx8Zy1JhG8gsGZeCy9cC13F4rmOMJg7DwQxXYiC7IppUmQ5FHOjyftzj3MhFfW6F8kpZfwpvROXz1n7zpFA6VRvDVPyvF2t19RcmXwfbY0bEUHxM6MPGXF91J6kSeSNFvdTz4LE+cy6+L9pTM24pGPkTLV8dj0RnFjGZ9syW8qN5SuUjrR8FuU6+YeHNJW3ag2d0VRj4zshMFTctypJuRpK5EUtTnSJ33E4x3TEyuyN+K1hnxkhkjaNSJdbyTD1ZGU1N0lze9PzWQxt3F9ieqfLUp2rp7OZTkxNhGHmNK8q00pL0caJI8hXiMNzhv67/rKj2Yg2a0UyCzUOCMhk7n6JPFDZk9quVk7xzNTkhhDUjTaM9WyL+LpfYkcu8O/fGzKdXrIqkbUGuO/0/RnrVKK6dUBZby0e3Ja2WYXaKDruj3jrJD4/ETnW3SUpIke5ei2MES8ri9FJkoL0sKxlGKtLxFKK26nWRPVLV2G1tm930l6D1Nadk2vNfhbpwXK1Nn/2He/qw4YHqIknabOPhyPbbcvpZbZZAE6ToyP96VY60sb3umKDlnrS53dZ7e0xJqGi0gf8fKmxsSzxYFpfSnaT0mDVk8pNPgSS2xtxXEP9kuRqV+iE+nxnmlLSwxR9vpS3A6wM3kpzElE0qadfdTsPvVdZcwnWptYnX4jFk5rzWN6+tm6LiY6MEXLKt1pO7PISClu94bK+dcre9D6UtAkx4d9SZ0GHxLxeOyKxWzVlW563hBwo8DRnFMO2YLcJ/v2P2pkoZcOBaX8wOUOT1eJ5nj8PHkzUfLJ+odonC/F7RwvkfM3Vmai5JHx9ppMrB7MHngvcCcOkYaO13rNTao9Scr59FyM6ZRD9MkSkHb+0bqs65PDaifVj3VOWOaaUZToxkuZjtKCGCDXzrbKYXFt2pD4XWe81IcSPT18MjWro9RM6yRF+jTpDh3M/RIPIJ4YpfLpiGd5TmoorcTJuupS4gPz0m3ye1GPjKnXdnuaYilzi0AcbDWa5+NEXzf3cF8G+ntdJT6DtDDMPQhnrQN1QHo5b08mrk4G0AIsybvKhb2+GCltu53+ztwvKZSE//NzgM+Kup4nO5h2xGM2d1K+36niIM2MnetNZfznwcDxZg5NCabN11dk4pQf7WTmuTI76XRMZSWnW8lehfpKtANypbcGHV8a2C81RzYNmrny1Ly2ddmG9FLoKUXtZRab1sqaH3Z3nrET8dR587WakT5ocvlMPwj6Uzdx2t7AvHXAD9o58da3ruH6kgwFJJHqF/H0lAr1ioy86qRbgbzUzp/38CWx4KmJ/qpf/qnNHh47ViR9OrmucS/q3WknlOWlIuuGnCrXtNxVZry+ZC2ljdWrKW5WmH1pIy/YhNqIN2CGSL3WVgfifevEA1J4vi06lCITJd9qTRK+2u1rqt3sgZy5y7ydeYlrCy+RHC/Nm/LXW3KIWfP1v3YkfabDsetuypQ38fGPmFYibG8z0+qUQlxb8YuWL80O5HhkdQotUCTTzlK/Pav51+VKgZnnLUKZE2VRtRyBXSuN65UJlUl39WIIsUahXhuhXO/flhuaVcsO+MGSugIlIzFdvYt1D7FY95Cvq5b4abGrs0Q2O71dVIseyoUSaVgvyG6SgerrsmihLPnOwllV2ltttcseWKVyU3WlZnH55obN4usWPuR1+3gDy09xVPcfaVR9ZJ+TqFn3sAvkSvug1q42VNSsi8jiul7T2DUbqTt7Fj7gnosCd8ZAJ9H/ATa9vKX8nrDMAAAAAElFTkSuQmCC" alt="Universidade do Minho"></a>
+      <div>
+        <p class="course"><a href="https://distributedum.github.io/dba/">Database Administration</a> · Master in Informatics Engineering</p>
+        <h1>Query Optimizer Workbench</h1>
+        <p class="rules" id="rules"></p>
+      </div>
+    </div>
+    <button id="themeBtn" type="button">Dark mode</button>
+  </header>
+
+  <main class="layout">
+    <aside class="controls">
+      <section class="card">
+        <div class="seg" role="group" aria-label="Optimizer">
+          <button id="modeH" type="button" aria-pressed="true">Heuristic</button>
+          <button id="modeC" type="button" aria-pressed="false">Cascades</button>
+        </div>
+        <div class="field">
+          <label for="presetSel">Example</label>
+          <select id="presetSel"></select>
+        </div>
+        <p id="presetNote"></p>
+        <div class="btnrow small">
+          <button id="resetBtn" type="button">Reload example</button>
+          <button id="undoBtn" type="button">Undo</button>
+        </div>
+        <p id="msg" class="msg" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Search</h2>
+        <div id="heurBtns" class="btnrow">
+          <button id="greedyStepBtn" type="button" title="Apply the move that lowers the cost the most">Greedy step</button>
+          <button id="greedyRunBtn" type="button" title="Repeat greedy steps until no move lowers the cost">Greedy until stuck</button>
+          <button id="fixBtn" type="button" title="Apply the first rule that matches, in list order, top-down, until none applies">Rewrite to fixpoint</button>
+          <button id="costBtn" class="primary" type="button">Cost the plan</button>
+        </div>
+        <div id="cascBtns" class="btnrow" hidden>
+          <button id="exploreBtn" type="button" title="Apply every active rule to every expression until nothing new appears">Explore all</button>
+          <button id="memoFromPlanBtn" type="button" title="Start a new memo from the current heuristic plan">New memo from plan</button>
+          <button id="bestBtn" class="primary" type="button">Find best plan</button>
+        </div>
+        <div class="scriptbox" id="scriptBox" hidden>
+          <button id="scriptBtn" type="button">Next suggested move</button>
+          <p id="scriptNext"></p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Rule set</h2>
+        <p class="hint">Ticked rules can be applied. Rewrite to fixpoint tries them in this order.</p>
+        <ol class="rulelist" id="ruleList"></ol>
+        <label class="check"><input type="checkbox" id="crossChk" checked> Allow cross products</label>
+      </section>
+
+      <section class="card stats">
+        <h2 id="statsTitle">Current plan</h2>
+        <dl>
+          <div><dt id="st1l">Cost</dt><dd id="st1">0</dd></div>
+          <div><dt id="st2l">Rows out</dt><dd id="st2">0</dd></div>
+          <div><dt id="st3l">Cross products</dt><dd id="st3">0</dd></div>
+          <div><dt id="st4l">Plans visited</dt><dd id="st4">0</dd></div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Cost model</h2>
+        <select id="modelSel" aria-label="Cost model">
+          <option value="hash">Tuples touched (hash join)</option>
+          <option value="cout">Sum of result sizes (C_out)</option>
+        </select>
+        <p class="hint" id="modelHint"></p>
+        <h2>Display</h2>
+        <label class="check"><input type="checkbox" id="estChk" checked> Show row and cost estimates on the plan</label>
+        <label class="check"><input type="checkbox" id="animChk" checked> Play each operation step by step</label>
+        <div class="field">
+          <label for="speed">Time per step <output id="speedOut">1.4 s</output></label>
+          <input type="range" id="speed" min="300" max="3500" step="100" value="1400">
+        </div>
+        <div class="field">
+          <label for="zoom">Zoom <output id="zoomOut">100%</output></label>
+          <input type="range" id="zoom" min="50" max="200" step="10" value="100">
+        </div>
+      </section>
+    </aside>
+
+    <section class="board">
+      <div class="querybox">
+        <pre id="sql"></pre>
+        <div class="qinfo">
+          <div class="row" id="relInfo"></div>
+          <div class="row" id="predInfo"></div>
+        </div>
+      </div>
+
+      <div class="stepbar">
+        <div class="stepnav">
+          <button id="firstBtn" type="button" aria-label="First step" title="First step"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button id="prevBtn" type="button" aria-label="Previous step" title="Previous step (←)"><svg viewBox="0 0 24 24"><path d="M16 5v14L5 12z"/></svg></button>
+          <button id="playBtn" type="button" aria-label="Play" title="Play / pause (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+          <button id="nextBtn" type="button" aria-label="Next step" title="Next step (→)"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <button id="lastBtn" type="button" aria-label="Last step" title="Last step"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          <span id="counter"></span>
+        </div>
+        <p id="caption" aria-live="polite"></p>
+      </div>
+
+      <div class="work">
+        <div class="stagecol">
+          <div class="stage" id="stage"><svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Query plan"></svg></div>
+          <div class="legend">
+            <span><i style="background:var(--found-bg);border-color:var(--found)"></i>Selected pivot</span>
+            <span><i style="background:var(--visit-bg);border-color:var(--visit)"></i>Matched by the rule / being costed</span>
+            <span><i style="background:var(--ok-bg);border-color:var(--ok)"></i>New or changed, cost not higher / cheapest</span>
+            <span><i style="background:var(--bad-bg);border-color:var(--bad)"></i>Cost went up / cross product / blocked</span>
+            <span><i style="background:var(--split-bg);border-color:var(--split)"></i>Seen before: duplicate or repeated plan</span>
+          </div>
+        </div>
+        <div class="sidecol">
+          <div class="panel">
+            <div class="panelhead">
+              <h3 id="movesTitle">Moves at the selected node</h3>
+              <div class="seg mini" role="group" aria-label="Which moves" id="movesScope">
+                <button id="scopeNode" type="button" aria-pressed="true">This node</button>
+                <button id="scopeAll" type="button" aria-pressed="false">Whole plan</button>
+              </div>
+            </div>
+            <div class="panelbody moveslist" id="movesBody"></div>
+          </div>
+          <div class="panel">
+            <div class="panelhead"><h3 id="sideTitle">Derivation: plans visited</h3></div>
+            <div class="panelbody" id="sideBody">
+              <ol id="deriv"></ol>
+              <div id="bestText" hidden></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="logbox" id="logBox">
+        <p class="loghead">Steps of the last operation</p>
+        <ol id="log"></ol>
+      </div>
+    </section>
+  </main>
+
+  <footer class="credit">
+    <span><a href="https://distributedum.github.io/dba/">Database Administration</a> · Universidade do Minho</span>
+    <span>Built with Claude, Anthropic's AI assistant.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const PAD = 24;
+  const S = { mode: 'heur', preset: 0, active: new Set(), animate: true, speed: 1400, zoom: 1, showEst: true, scope: 'node' };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ---------- optimizer core ----------
+  // Plans are immutable trees: { id, op: 'scan' | 'filter' | 'join', rel, preds: [predicate ids], kids: [...] }.
+  // Rules also run on memo bindings, where a child can be a group leaf { op: 'group', g, p: { rels, preds } }.
+  let Q = null;                 // current query: { rels: { S: { name, card } }, preds: { p1: { text, rels, sel } } }
+  let nextId = 1;
+  const OPT = { model: 'hash', cross: true };
+
+  const uniq = a => [...new Set(a)].sort();
+  const subset = (a, b) => a.every(x => b.includes(x));
+  const mkScan = (rel, id) => ({ id: id ?? nextId++, op: 'scan', rel, preds: [], kids: [] });
+  const mkFilter = (preds, child, id) => ({ id: id ?? nextId++, op: 'filter', preds: preds.slice(), kids: [child] });
+  const mkJoin = (preds, l, r, id) => ({ id: id ?? nextId++, op: 'join', preds: preds.slice(), kids: [l, r] });
+  const isJoin = n => n.op === 'join', isFilter = n => n.op === 'filter';
+
+  function props(n) {
+    if (n.op === 'group') return n.p;
+    if (n.op === 'scan') return { rels: [n.rel], preds: [] };
+    const ps = n.kids.map(props);
+    return { rels: uniq(ps.flatMap(p => p.rels)), preds: uniq(ps.flatMap(p => p.preds).concat(n.preds)) };
+  }
+  const relsOf = n => props(n).rels;
+  function cardOf(p) {
+    let c = 1;
+    for (const r of p.rels) c *= Q.rels[r].card;
+    for (const x of p.preds) c *= Q.preds[x].sel;
+    return c;
+  }
+  const rowsOf = n => cardOf(props(n));
+  // cost of one operator, given its input and output row counts
+  function localCost(op, nPreds, kidRows, out) {
+    if (OPT.model === 'cout' || op === 'scan') return out;
+    if (op === 'filter') return kidRows[0];
+    return nPreds ? kidRows[0] + 2 * kidRows[1] : kidRows[0] * kidRows[1];
+  }
+  const opCost = n => localCost(n.op, n.preds.length, n.kids.map(rowsOf), rowsOf(n));
+  const planCost = n => opCost(n) + n.kids.reduce((s, k) => s + planCost(k), 0);
+  // per-node estimates for drawing: rows, own cost, subtree cost
+  function annotate(n, out = new Map()) {
+    let sub = 0;
+    for (const k of n.kids) { annotate(k, out); sub += out.get(k.id).total; }
+    const local = opCost(n);
+    out.set(n.id, { rows: rowsOf(n), local, total: local + sub });
+    return out;
+  }
+  const crossCount = n => (isJoin(n) && !n.preds.length ? 1 : 0) + n.kids.reduce((s, k) => s + crossCount(k), 0);
+  // canonical text of a plan, used to detect that a rule sequence came back to an earlier plan
+  function canon(n) {
+    if (n.op === 'scan') return n.rel;
+    if (n.op === 'group') return 'G' + n.g;
+    const p = uniq(n.preds).join(',');
+    return n.op === 'filter' ? `σ{${p}}(${canon(n.kids[0])})` : `⋈{${p}}(${canon(n.kids[0])},${canon(n.kids[1])})`;
+  }
+  function preorder(n, out = []) { out.push(n); n.kids.forEach(k => preorder(k, out)); return out; }
+  function findNode(n, id) { if (n.id === id) return n; for (const k of n.kids) { const f = findNode(k, id); if (f) return f; } return null; }
+  function replaceAt(n, id, sub) { return n.id === id ? sub : { ...n, kids: n.kids.map(k => replaceAt(k, id, sub)) }; }
+  function nodeAtPath(n, path) { for (const c of path) { n = n.kids[+c]; if (!n) return null; } return n; }
+
+  // reattach predicates to the lowest join that sees all their tables
+  function placePreds(all, rels) {
+    const inner = [], outer = [];
+    for (const p of all) (subset(Q.preds[p].rels, rels) ? inner : outer).push(p);
+    return [inner, outer];
+  }
+
+  // Each rule: patterns (what the pivot and its children must be) and apply(pivot) -> variants.
+  // A variant is { tree, label, m: [matched node ids] }, plus blocked: 'reason' when it may not be used.
+  const RULES = [
+    { key: 'split', name: 'Split a conjunction', formula: 'σ<sub>p∧q</sub>(X) → σ<sub>q</sub>(σ<sub>p</sub>(X))',
+      patterns: [{ op: 'filter' }],
+      apply(n) {
+        if (!isFilter(n) || n.preds.length < 2) return [];
+        return n.preds.map(p => ({ tree: mkFilter(n.preds.filter(x => x !== p), mkFilter([p], n.kids[0]), n.id), label: `move ${p} into its own σ below`, m: [n.id], pred: p }));
+      } },
+    { key: 'merge', name: 'Merge selections', formula: 'σ<sub>p</sub>(σ<sub>q</sub>(X)) → σ<sub>p∧q</sub>(X)',
+      patterns: [{ op: 'filter', kids: [{ op: 'filter' }] }],
+      apply(n) {
+        const c = n.kids[0];
+        if (!isFilter(n) || !isFilter(c)) return [];
+        return [{ tree: mkFilter([...n.preds, ...c.preds], c.kids[0], n.id), label: '', m: [n.id, c.id] }];
+      } },
+    { key: 'swap', name: 'Selections commute', formula: 'σ<sub>p</sub>(σ<sub>q</sub>(X)) → σ<sub>q</sub>(σ<sub>p</sub>(X))',
+      patterns: [{ op: 'filter', kids: [{ op: 'filter' }] }],
+      apply(n) {
+        const c = n.kids[0];
+        if (!isFilter(n) || !isFilter(c)) return [];
+        return [{ tree: mkFilter(c.preds, mkFilter(n.preds, c.kids[0], n.id), c.id), label: '', m: [n.id, c.id] }];
+      } },
+    { key: 'push', name: 'Push a selection below a join', formula: 'σ<sub>p</sub>(A ⋈ B) → σ<sub>p</sub>(A) ⋈ B',
+      patterns: [{ op: 'filter', kids: [{ op: 'join' }] }],
+      apply(n) {
+        const j = n.kids[0];
+        if (!isFilter(n) || !isJoin(j)) return [];
+        const pr = n.preds.map(p => Q.preds[p].rels);
+        for (let side = 0; side < 2; side++) {
+          const r = relsOf(j.kids[side]);
+          if (pr.every(x => subset(x, r))) {
+            const kids = j.kids.slice();
+            kids[side] = mkFilter(n.preds, kids[side], n.id);
+            return [{ tree: mkJoin(j.preds, kids[0], kids[1], j.id), label: side ? 'into the right input' : 'into the left input', m: [n.id, j.id] }];
+          }
+        }
+        return [];
+      } },
+    { key: 'into', name: 'Selection into join', formula: 'σ<sub>p</sub>(A ⋈<sub>q</sub> B) → A ⋈<sub>p∧q</sub> B',
+      patterns: [{ op: 'filter', kids: [{ op: 'join' }] }],
+      apply(n) {
+        const j = n.kids[0];
+        if (!isFilter(n) || !isJoin(j)) return [];
+        const L = relsOf(j.kids[0]), R = relsOf(j.kids[1]);
+        if (!n.preds.every(p => { const r = Q.preds[p].rels; return !subset(r, L) && !subset(r, R); })) return [];
+        return [{ tree: mkJoin([...j.preds, ...n.preds], j.kids[0], j.kids[1], j.id), label: '', m: [n.id, j.id] }];
+      } },
+    { key: 'pull', name: 'Pull a selection above a join', formula: 'σ<sub>p</sub>(A) ⋈ B → σ<sub>p</sub>(A ⋈ B)',
+      patterns: [{ op: 'join', kids: [{ op: 'filter' }, null] }, { op: 'join', kids: [null, { op: 'filter' }] }],
+      apply(n) {
+        if (!isJoin(n)) return [];
+        const out = [];
+        n.kids.forEach((f, side) => {
+          if (!isFilter(f)) return;
+          const kids = n.kids.slice();
+          kids[side] = f.kids[0];
+          out.push({ tree: mkFilter(f.preds, mkJoin(n.preds, kids[0], kids[1], n.id), f.id), label: side ? 'from the right input' : 'from the left input', m: [n.id, f.id] });
+        });
+        return out;
+      } },
+    { key: 'assoc', name: 'Join associativity', formula: '(A ⋈ B) ⋈ C → A ⋈ (B ⋈ C)',
+      patterns: [{ op: 'join', kids: [{ op: 'join' }, null] }],
+      apply(n) {
+        const l = n.kids[0];
+        if (!isJoin(n) || !isJoin(l)) return [];
+        const [A, B] = l.kids, C = n.kids[1];
+        const [inner, outer] = placePreds([...l.preds, ...n.preds], uniq([...relsOf(B), ...relsOf(C)]));
+        return [{ tree: mkJoin(outer, A, mkJoin(inner, B, C, l.id), n.id), label: '', m: [n.id, l.id] }];
+      } },
+    { key: 'assocR', name: 'Join associativity (back)', formula: 'A ⋈ (B ⋈ C) → (A ⋈ B) ⋈ C',
+      patterns: [{ op: 'join', kids: [null, { op: 'join' }] }],
+      apply(n) {
+        const r = n.kids[1];
+        if (!isJoin(n) || !isJoin(r)) return [];
+        const A = n.kids[0], [B, C] = r.kids;
+        const [inner, outer] = placePreds([...n.preds, ...r.preds], uniq([...relsOf(A), ...relsOf(B)]));
+        return [{ tree: mkJoin(outer, mkJoin(inner, A, B, r.id), C, n.id), label: '', m: [n.id, r.id] }];
+      } },
+    { key: 'exch', name: 'Left join exchange', formula: '(A ⋈ B) ⋈ C → (A ⋈ C) ⋈ B',
+      patterns: [{ op: 'join', kids: [{ op: 'join' }, null] }],
+      apply(n) {
+        const l = n.kids[0];
+        if (!isJoin(n) || !isJoin(l)) return [];
+        const [A, B] = l.kids, C = n.kids[1];
+        const [inner, outer] = placePreds([...l.preds, ...n.preds], uniq([...relsOf(A), ...relsOf(C)]));
+        return [{ tree: mkJoin(outer, mkJoin(inner, A, C, l.id), B, n.id), label: '', m: [n.id, l.id] }];
+      } },
+    { key: 'comm', name: 'Join commutativity', formula: 'A ⋈ B → B ⋈ A',
+      patterns: [{ op: 'join' }],
+      apply(n) {
+        if (!isJoin(n)) return [];
+        return [{ tree: mkJoin(n.preds, n.kids[1], n.kids[0], n.id), label: '', m: [n.id] }];
+      } },
+  ];
+  const RULE = Object.fromEntries(RULES.map(r => [r.key, r]));
+
+  // all variants of one rule at one node, with the cross-product restriction applied
+  function variants(rule, n) {
+    return rule.apply(n).map(v => {
+      if (!OPT.cross && crossCount(v.tree) > crossCount(n)) v.blocked = 'it would create a cross product';
+      return v;
+    });
+  }
+
+  // every (rule, node, variant) move from a plan, with the cost of the resulting plan
+  function allMoves(root, active) {
+    const out = [];
+    for (const n of preorder(root)) for (const rule of RULES) {
+      if (!active.has(rule.key)) continue;
+      variants(rule, n).forEach((v, vi) => {
+        const plan = replaceAt(root, n.id, v.tree);
+        out.push({ rule, node: n, v, vi, plan, cost: v.blocked ? NaN : planCost(plan) });
+      });
+    }
+    return out;
+  }
+  // naive rewriting: first active rule in list order, first node top-down where it applies
+  function firstMove(root, active) {
+    for (const rule of RULES) {
+      if (!active.has(rule.key)) continue;
+      for (const n of preorder(root)) {
+        const vs = variants(rule, n).filter(v => !v.blocked);
+        if (vs.length) return { rule, node: n, v: vs[0], vi: 0, plan: replaceAt(root, n.id, vs[0].tree) };
+      }
+    }
+    return null;
+  }
+  // hill climbing: the move that lowers the cost the most (null at a local minimum)
+  function bestMove(root, active) {
+    const cur = planCost(root);
+    let best = null;
+    for (const m of allMoves(root, active)) if (!m.v.blocked && m.cost < cur - 1e-9 && (!best || m.cost < best.cost - 1e-9)) best = m;
+    return best;
+  }
+
+  // ---------- memo (Cascades) ----------
+  // groups[i] = { id, rels, preds, exprs: [{ id: 'g.k', g, op, rel, preds, kids: [group ids], from }] }
+  // index: expression key -> expression (finds exact duplicates); sig: logical content -> group id
+  function memoNew() { return { groups: [], index: new Map(), sig: new Map(), root: 0, dups: 0 }; }
+  const exprKey = (op, rel, preds, kids) => `${op}|${rel || ''}|${uniq(preds).join(',')}|${kids.join(',')}`;
+  const sigKey = (rels, preds) => rels.join(',') + '|' + preds.join(',');
+  const grp = (memo, gid) => memo.groups[gid - 1];
+  const exprById = (memo, id) => { const [g, k] = id.split('.').map(Number); return grp(memo, g) && grp(memo, g).exprs[k - 1]; };
+  const groupLeaf = (memo, gid) => { const g = grp(memo, gid); return { op: 'group', g: gid, p: { rels: g.rels, preds: g.preds }, preds: [], kids: [] }; };
+  function memoClone(m) {
+    const c = memoNew();
+    c.root = m.root; c.dups = m.dups;
+    c.groups = m.groups.map(g => ({ ...g, exprs: g.exprs.map(e => ({ ...e })) }));
+    for (const g of c.groups) {
+      c.sig.set(sigKey(g.rels, g.preds), g.id);
+      for (const e of g.exprs) c.index.set(exprKey(e.op, e.rel, e.preds, e.kids), e);
+    }
+    return c;
+  }
+  // Copy a tree into the memo bottom-up. Each node is looked up by its key first (exact duplicate),
+  // then by its logical content (same tables and predicates = same group). ev receives one event per node.
+  function copyIn(memo, t, target, ev, from) {
+    if (t.op === 'group') return t.g;
+    const kids = t.kids.map(k => copyIn(memo, k, null, ev, from));
+    const key = exprKey(t.op, t.rel, t.preds, kids);
+    const hit = memo.index.get(key);
+    if (hit) { ev.push({ type: 'dup', e: hit, top: target != null }); memo.dups++; return hit.g; }
+    let rels, preds;
+    if (t.op === 'scan') { rels = [t.rel]; preds = []; }
+    else {
+      const ks = kids.map(g => grp(memo, g));
+      rels = uniq(ks.flatMap(g => g.rels));
+      preds = uniq(ks.flatMap(g => g.preds).concat(t.preds));
+    }
+    const sk = sigKey(rels, preds);
+    let gid = memo.sig.get(sk), fresh = false;
+    if (target != null && gid !== target) throw new Error('rule result is not equivalent to its pivot');
+    if (gid == null) {
+      gid = memo.groups.length + 1;
+      memo.groups.push({ id: gid, rels, preds, exprs: [] });
+      memo.sig.set(sk, gid);
+      fresh = true;
+    }
+    const g = grp(memo, gid);
+    const e = { id: `${gid}.${g.exprs.length + 1}`, g: gid, op: t.op, rel: t.rel, preds: t.preds.slice(), kids, from };
+    g.exprs.push(e);
+    memo.index.set(key, e);
+    ev.push({ type: fresh ? 'group' : 'add', e, top: target != null });
+    return gid;
+  }
+  // all bindings of a memo expression to a rule pattern: trees whose nodes come from the memo
+  function bindings(memo, e, pat) {
+    if (pat.op && e.op !== pat.op) return [];
+    let combos = [[]];
+    e.kids.forEach((gid, i) => {
+      const kp = pat.kids && pat.kids[i];
+      const alts = kp ? grp(memo, gid).exprs.flatMap(x => bindings(memo, x, kp)) : [groupLeaf(memo, gid)];
+      combos = combos.flatMap(c => alts.map(a => c.concat([a])));
+    });
+    return combos.map(kids => ({ id: 0, op: e.op, rel: e.rel, preds: e.preds, kids, src: e.id }));
+  }
+  const bindSrcs = b => b.op === 'group' ? [] : [b.src, ...b.kids.flatMap(bindSrcs)];
+  // apply one rule to one memo expression: every binding, every variant
+  function applyMemoRule(memo, e, rule) {
+    const results = [];
+    for (const pat of rule.patterns) for (const b of bindings(memo, e, pat)) for (const v of variants(rule, b)) {
+      const r = { b, v, srcs: bindSrcs(b), ev: [] };
+      if (!v.blocked) copyIn(memo, v.tree, e.g, r.ev, rule.key);
+      results.push(r);
+    }
+    return results;
+  }
+  // groups in an order where every child group comes before its parents
+  const groupOrder = memo => memo.groups.slice().sort((a, b) => a.rels.length - b.rels.length || a.preds.length - b.preds.length || a.id - b.id);
+  // cheapest plan for every group (dynamic programming over the memo)
+  function memoCosts(memo) {
+    const rows = g => cardOf(grp(memo, g));
+    const exprCost = new Map(), best = new Map();
+    for (const g of groupOrder(memo)) {
+      let win = null;
+      for (const e of g.exprs) {
+        const local = localCost(e.op, e.preds.length, e.kids.map(rows), cardOf(g));
+        const total = local + e.kids.reduce((s, k) => s + best.get(k).cost, 0);
+        exprCost.set(e.id, { local, total });
+        if (!win || total < win.cost - 1e-9) win = { e, cost: total };
+      }
+      best.set(g.id, win);
+    }
+    return { exprCost, best };
+  }
+  function extractPlan(memo, best, gid) {
+    const e = best.get(gid).e;
+    const kids = e.kids.map(k => extractPlan(memo, best, k));
+    return { id: e.id, op: e.op, rel: e.rel, preds: e.preds, kids, eid: e.id };
+  }
+  // apply every active rule to every expression until a pass adds nothing
+  function exploreAll(memo, active, cap = 600) {
+    let added = 0, passes = 0;
+    for (;;) {
+      const before = memo.groups.reduce((s, g) => s + g.exprs.length, 0);
+      passes++;
+      for (let gi = 0; gi < memo.groups.length; gi++) {
+        const g = memo.groups[gi];
+        for (let ei = 0; ei < g.exprs.length; ei++)
+          for (const rule of RULES) if (active.has(rule.key)) applyMemoRule(memo, g.exprs[ei], rule);
+      }
+      const after = memo.groups.reduce((s, g) => s + g.exprs.length, 0);
+      added += after - before;
+      if (after === before || after > cap) return { added, passes, capped: after > cap };
+    }
+  }
+  // ---------- end of optimizer core ----------
+  // The schema shared by all examples. Selectivities follow the usual textbook estimates:
+  // 1/|R| for a key–foreign key join on R's key, the stated fraction for a selection.
+  const TABLES = {
+    S: { name: 'Student', card: 5000, cols: 'sid, name, year' },
+    E: { name: 'Enrolled', card: 20000, cols: 'sid, cid, grade' },
+    C: { name: 'Course', card: 500, cols: 'cid, title, ects, did' },
+    D: { name: 'Dept', card: 50, cols: 'did, name, building' },
+  };
+  const PREDS = {
+    se: { text: 'S.sid = E.sid', rels: ['S', 'E'], sel: 1 / 5000, selText: '1/5,000' },
+    ec: { text: 'E.cid = C.cid', rels: ['E', 'C'], sel: 1 / 500, selText: '1/500' },
+    cd: { text: 'C.did = D.did', rels: ['C', 'D'], sel: 1 / 50, selText: '1/50' },
+    year: { text: 'S.year = 1', rels: ['S'], sel: 0.25, selText: '0.25' },
+    ects: { text: 'C.ects = 6', rels: ['C'], sel: 0.2, selText: '0.2' },
+    bldg: { text: "D.building = 'B2'", rels: ['D'], sel: 0.2, selText: '0.2' },
+  };
+  // plan builders receive the predicate ids p1, p2, ... in WHERE-clause order
+  const sc = r => mkScan(r), sg = (p, x) => mkFilter([p], x);
+  const PRESETS = [
+    { title: '1 · Push selections down', mode: 'heur', from: ['S', 'E', 'C'], where: ['se', 'ec', 'year', 'ects'],
+      rules: ['split', 'push', 'into'], cross: true,
+      note: 'The canonical plan: the cross product of the FROM list, with the whole WHERE clause in one σ on top. Click the σ, move one predicate into its own σ and push it down, or press <b>Rewrite to fixpoint</b>. Then reload and press <b>Greedy step</b>: hill climbing on cost cannot even start, because splitting a σ costs a little before pushing it saves a lot.',
+      plan: P => mkFilter([P[0], P[1], P[2], P[3]], mkJoin([], mkJoin([], sc('S'), sc('E')), sc('C'))) },
+    { title: '2 · Join order: a local minimum', mode: 'heur', from: ['E', 'C', 'S', 'D'], where: ['ec', 'se', 'cd', 'bldg'],
+      rules: ['assoc', 'assocR', 'comm'], cross: true,
+      note: 'The selections are already pushed down; now reorder the joins by cost. Choose <b>Whole plan</b> in the moves panel: every move makes this plan more expensive, so <b>Greedy</b> stops at once. The best plan costs 59,320. <b>Next suggested move</b> gets there by first going uphill. Or tick <b>Left join exchange</b>: with a larger neighbourhood the local minimum disappears.',
+      plan: P => mkJoin([P[2]], mkJoin([P[1]], mkJoin([P[0]], sc('E'), sc('C')), sc('S')), sg(P[3], sc('D'))),
+      script: [{ rule: 'comm', at: '0' }, { rule: 'assoc', at: '' }, { rule: 'assoc', at: '1' }] },
+    { title: '3 · Rules that loop', mode: 'heur', from: ['S', 'E', 'C'], where: ['se', 'ec', 'year', 'ects'],
+      rules: ['assoc', 'comm'], cross: true,
+      note: '<b>Rewrite to fixpoint</b> applies the first rule that matches, again and again. With associativity and commutativity it walks through six plans and arrives back at the first one, so it would never stop. Inverse pairs loop even faster: try <b>Push</b> + <b>Pull</b>, or <b>Split</b> + <b>Merge</b>.',
+      plan: P => mkJoin([P[1]], mkJoin([P[0]], sg(P[2], sc('S')), sc('E')), sg(P[3], sc('C'))) },
+    { title: '4 · Memo: duplicates are absorbed', mode: 'casc', from: ['S', 'E', 'C'], where: ['se', 'ec', 'year', 'ects'],
+      rules: ['assoc', 'assocR', 'comm'], cross: false,
+      note: 'The memo keeps one group per set of equivalent expressions. Click <b>Next suggested move</b> six times. Move 5 builds σC ⋈ E again by another route; the memo already holds it as 8.2, so no new group is created. Move 6 rebuilds expressions that are already there, and nothing is added.',
+      plan: P => mkJoin([P[1]], mkJoin([P[0]], sg(P[2], sc('S')), sc('E')), sg(P[3], sc('C'))),
+      script: [{ rule: 'assoc', at: '7.1' }, { rule: 'comm', at: '8.1' }, { rule: 'comm', at: '4.1' },
+               { rule: 'comm', at: '7.1' }, { rule: 'assocR', at: '7.3' }, { rule: 'assocR', at: '7.2' }] },
+    { title: '5 · Memo: explore and cost', mode: 'casc', from: ['E', 'C', 'S', 'D'], where: ['ec', 'se', 'cd', 'bldg'],
+      rules: ['assoc', 'assocR', 'comm'], cross: false,
+      note: 'The plan from example 2, where greedy got stuck. Press <b>Explore all</b> to apply every rule until nothing new appears, then <b>Find best plan</b>: the memo costs each expression once and finds the 59,320 plan. Allow cross products to see the memo grow.',
+      plan: P => mkJoin([P[2]], mkJoin([P[1]], mkJoin([P[0]], sc('E'), sc('C')), sc('S')), sg(P[3], sc('D'))) },
+  ];
+
+  let plan = null, deriv = [], memo = null, memoBest = null, pivotH = null, pivotC = null;
+  let scriptPos = 0, history = [];
+  let steps = [], cur = 0, playing = false, timer = 0, rafId = 0, shownPos = null;
+  const preset = () => PRESETS[S.preset];
+
+  // ---------- text helpers ----------
+  const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+  function fnum(x) {
+    if (!isFinite(x)) return '–';
+    if (x >= 1e7) {
+      let e = Math.floor(Math.log10(x)), m = x / 10 ** e;
+      if (m >= 9.95) { m = 1; e++; }
+      return `${m.toFixed(1)}·10${String(e).split('').map(d => SUP[d]).join('')}`;
+    }
+    if (x >= 10 || Math.abs(x - Math.round(x)) < 1e-9) return Math.round(x).toLocaleString('en-US');
+    return x.toFixed(x < 1 ? 2 : 1);
+  }
+  function delta(a, b) {
+    if (Math.abs(b - a) <= 1e-9 * Math.max(1, a)) return '<span class="dl eq">±0</span>';
+    const pc = (b - a) / a * 100;
+    const ap = Math.abs(pc), sg = pc > 0 ? '+' : '−';
+    const t = ap >= 1000 ? `×${fnum(b / a)}` : ap < 0.1 ? `${sg}&lt;0.1%` : `${sg}${ap < 1 ? ap.toFixed(1) : Math.round(ap)}%`;
+    return `<span class="dl ${b < a ? 'down' : 'up'}">${t}</span>`;
+  }
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const ptext = p => esc(Q.preds[p].text);
+  const plist = ps => ps.map(p => `<span class="kc">${ptext(p)}</span>`).join(' ∧ ');
+  const sels = ps => ps.map(p => Q.preds[p].selText).join(' × ');
+  const tname = r => `${Q.rels[r].name} ${r}`;
+  const sub = ps => ps.length ? `<sub>${ps.join(',')}</sub>` : '';
+  // a plan or binding as compact algebra, e.g. (σ_p3 S ⋈_p1 E) ⋈_p2 σ_p4 C
+  function alg(n, top = true) {
+    let s;
+    if (n.op === 'group') s = `G${n.g}`;
+    else if (n.op === 'scan') s = n.rel;
+    else if (n.op === 'filter') s = `σ${sub(n.preds)} ${alg(n.kids[0], false)}`;
+    else s = `${alg(n.kids[0], false)} ${n.preds.length ? '⋈' + sub(n.preds) : '×'} ${alg(n.kids[1], false)}`;
+    return !top && n.op === 'join' ? `(${s})` : s;
+  }
+  const algT = n => `<span class="tx">${alg(n)}</span>`;
+  // a group named by its content: tables, with σ on those that carry a selection
+  function gname(g) {
+    const loc = new Set(g.preds.filter(p => Q.preds[p].rels.length === 1).map(p => Q.preds[p].rels[0]));
+    return `{${g.rels.map(r => (loc.has(r) ? 'σ' : '') + r).join(', ')}}`;
+  }
+  function exprText(e) {
+    if (e.op === 'scan') return `Scan ${e.rel}`;
+    if (e.op === 'filter') return `σ${sub(e.preds)} G${e.kids[0]}`;
+    return `G${e.kids[0]} ${e.preds.length ? '⋈' + sub(e.preds) : '×'} G${e.kids[1]}`;
+  }
+  const exprT = e => `<span class="tx">${exprText(e)}</span>`;
+  const nodeName = n => n.op === 'scan' ? `Seq scan ${n.rel}` : n.op === 'filter' ? `σ${sub(n.preds)}` : n.preds.length ? `⋈${sub(n.preds)}` : '×';
+
+  // ---------- operations ----------
+  function loadQuery(p) {
+    const rels = {}, preds = {};
+    for (const r of p.from) rels[r] = { ...TABLES[r] };
+    const ids = p.where.map((k, i) => {
+      const id = 'p' + (i + 1);
+      preds[id] = { ...PREDS[k], key: k };
+      return id;
+    });
+    Q = { rels, preds };
+    return ids;
+  }
+
+  function snapshot() {
+    return { plan, deriv: deriv.slice(), memo: memoClone(memo), memoBest, pivotH, pivotC, scriptPos, preset: S.preset, Q, active: new Set(S.active), cross: OPT.cross, mode: S.mode };
+  }
+  function pushHistory() { history.push(snapshot()); if (history.length > 200) history.shift(); }
+
+  function rec(kind, msg, extra = {}) {
+    const st = { kind, msg, view: extra.view || (S.mode === 'heur' ? 'plan' : 'memo'), hl: {}, ...extra };
+    if (st.view === 'plan' && !st.plan) st.plan = plan;
+    if (st.view === 'memo' && !st.groups) st.groups = snapGroups();
+    steps.push(st);
+  }
+  const snapGroups = () => memo.groups.map(g => ({ id: g.id, rels: g.rels, preds: g.preds, exprs: g.exprs.map(e => ({ ...e })) }));
+
+  function addDeriv(p, label) {
+    const c = canon(p);
+    const loopOf = deriv.findIndex(d => d.canon === c);
+    deriv.push({ plan: p, cost: planCost(p), canon: c, label, loopOf });
+    return loopOf;
+  }
+
+  function loadPreset(i, record = true) {
+    stopPlay();
+    if (plan) pushHistory();
+    S.preset = i;
+    const p = PRESETS[i];
+    const ids = loadQuery(p);
+    plan = p.plan(ids);
+    pivotH = plan.id;
+    deriv = [];
+    addDeriv(plan, 'Initial plan');
+    S.active = new Set(p.rules);
+    OPT.cross = p.cross;
+    scriptPos = 0;
+    $('presetSel').value = String(i);
+    syncRuleUI();
+    renderQuery();
+    $('presetNote').innerHTML = p.note;
+    setMode(p.mode, false);
+    steps = [];
+    buildMemo(plan, S.mode === 'casc' && record);
+    if (S.mode === 'heur') rec('info', `Loaded the plan for this query. Its estimated cost is ${fnum(planCost(plan))}. Click a node to choose the pivot, then pick a rule from the moves panel below.`);
+    setMsg('');
+    startSteps();
+  }
+
+  // copy a plan into a fresh memo, narrating each node when asked to
+  function buildMemo(p, narrate) {
+    memo = memoNew();
+    memoBest = null;
+    const ev = [];
+    if (narrate) ev.push = e => { Array.prototype.push.call(ev, e); rec('copy', `Copy in ${exprT(e.e)}: no equal expression and no group with the same content yet, so create group G${e.e.g} = ${gname(grp(memo, e.e.g))} holding ${e.e.id}.`, { hl: { ['e' + e.e.id]: 'ok', ['g' + e.e.g]: 'ok' }, links: e.e.kids.map(k => [e.e.id, k, 'ok']) }); return ev.length; };
+    memo.root = copyIn(memo, p, null, ev, 'plan');
+    pivotC = grp(memo, memo.root).exprs[0].id;
+    if (narrate) rec('info', `The initial plan is in the memo: ${memo.groups.length} groups with one expression each. Group G${memo.root} is the whole query. Click an expression to choose the pivot, then apply a rule.`, { hl: { ['g' + memo.root]: 'found' } });
+  }
+
+  function setMode(m, record = true) {
+    S.mode = m;
+    $('modeH').setAttribute('aria-pressed', String(m === 'heur'));
+    $('modeC').setAttribute('aria-pressed', String(m === 'casc'));
+    $('heurBtns').hidden = m !== 'heur';
+    $('cascBtns').hidden = m !== 'casc';
+    $('movesScope').hidden = m !== 'heur';
+    $('movesTitle').textContent = m === 'heur' ? 'Moves at the selected node' : 'Rules on the selected expression';
+    $('sideTitle').textContent = m === 'heur' ? 'Derivation: plans visited' : 'Best plan in the memo';
+    $('deriv').hidden = m !== 'heur';
+    $('bestText').hidden = m === 'heur';
+    $('svg').setAttribute('aria-label', m === 'heur' ? 'Query plan tree' : 'Memo of groups and expressions');
+    updateRulesText();
+    if (record) {
+      stopPlay();
+      steps = [];
+      if (m === 'heur') rec('info', `Heuristic mode: one plan at a time. The current plan costs ${fnum(planCost(plan))}.`);
+      else rec('info', `Cascades mode: the memo has ${memo.groups.length} groups and ${countExprs()} expressions. It was started from the example's plan; use New memo from plan to start from the heuristic plan instead.`);
+      startSteps();
+    }
+  }
+  const countExprs = () => memo.groups.reduce((s, g) => s + g.exprs.length, 0);
+
+  // ---- heuristic operations ----
+  // apply one move with two steps: the match, then the result
+  function doMove(m, how = '') {
+    const before = plan, c0 = planCost(before);
+    const at = m.node;
+    const hl0 = {};
+    m.v.m.forEach(id => { hl0['n' + id] = 'visit'; });
+    hl0['n' + at.id] = 'found';
+    rec('match', `${how}${m.rule.name}${m.v.label ? ', ' + m.v.label : ''}. Pattern <span class="tx">${m.rule.formula}</span> matches at ${algT(at)}.`, { plan: before, hl: hl0 });
+    plan = m.plan;
+    const c1 = planCost(plan);
+    const loopOf = addDeriv(plan, `${m.rule.name}${m.v.label ? ', ' + m.v.label : ''}`);
+    const changed = changedIds(before, plan);
+    const cls = c1 > c0 + 1e-9 ? 'bad' : 'ok';
+    const hl = {};
+    changed.forEach(id => { hl['n' + id] = cls; });
+    let msg = `The pivot becomes ${algT(m.v.tree)}. Plan cost ${fnum(c0)} → ${fnum(c1)} ${delta(c0, c1)}.`;
+    if (crossCount(m.v.tree) > crossCount(at)) msg += ' The rule left a join without a predicate, so it is now a cross product.';
+    if (loopOf >= 0) {
+      preorder(plan).forEach(n => { hl['n' + n.id] = 'split'; });
+      msg += ` This is plan #${loopOf + 1} again: the rules went round in a circle.`;
+    }
+    if (!findNode(plan, pivotH)) pivotH = plan.id;
+    rec(loopOf >= 0 ? 'loop' : c1 > c0 + 1e-9 ? 'worse' : 'apply', msg, { hl });
+    return loopOf;
+  }
+  // nodes that are new, or whose operator, predicates or children changed
+  function changedIds(a, b) {
+    const sig = n => `${n.op}|${n.rel || ''}|${n.preds.join(',')}|${n.kids.map(k => k.id).join(',')}`;
+    const old = new Map(preorder(a).map(n => [n.id, sig(n)]));
+    return preorder(b).filter(n => old.get(n.id) !== sig(n)).map(n => n.id);
+  }
+
+  function applyMoveOp(m) {
+    stopPlay();
+    pushHistory();
+    steps = [];
+    doMove(m);
+    setMsg('');
+    startSteps();
+  }
+
+  function greedy(all) {
+    stopPlay();
+    const start = planCost(plan);
+    pushHistory();
+    steps = [];
+    let n = 0;
+    for (;;) {
+      const moves = allMoves(plan, S.active).filter(m => !m.v.blocked);
+      const best = bestMove(plan, S.active);
+      if (!best) {
+        const cand = moves.slice().sort((a, b) => a.cost - b.cost)[0];
+        const c = planCost(plan);
+        rec('stuck', moves.length
+          ? `Local minimum: none of the ${moves.length} possible moves lowers the cost ${fnum(c)}. The least bad one, ${cand.rule.name} at ${algT(cand.node)}, gives ${fnum(cand.cost)} ${delta(c, cand.cost)}. Greedy stops here${n ? ` after ${n} ${n === 1 ? 'move' : 'moves'}` : ''}.`
+          : 'No active rule applies anywhere in the plan, so greedy stops here.',
+          { hl: cand ? { ['n' + cand.node.id]: 'bad' } : {} });
+        break;
+      }
+      const cnt = moves.length;
+      doMove(best, `Greedy: the best of ${cnt} moves is `);
+      n++;
+      if (!all) break;
+      if (n >= 60) { rec('info', 'Stopped after 60 moves.'); break; }
+    }
+    setMsg(n ? `Greedy made ${n} ${n === 1 ? 'move' : 'moves'}: cost ${fnum(start)} → ${fnum(planCost(plan))}.` : 'Greedy found no improving move.');
+    if (!n) history.pop();
+    startSteps();
+  }
+
+  function fixpoint() {
+    stopPlay();
+    pushHistory();
+    steps = [];
+    const c0 = planCost(plan);
+    let n = 0, loop = -1;
+    for (; n < 60; n++) {
+      const m = firstMove(plan, S.active);
+      if (!m) break;
+      loop = doMove(m, `Rewrite ${n + 1}: `);
+      if (loop >= 0) { n++; break; }
+    }
+    const c1 = planCost(plan);
+    if (loop >= 0) {
+      rec('loop', `The rule set loops: rewrite ${n} brought back plan #${loop + 1}. Rewriting would go round forever, so a heuristic optimizer must avoid inverse rules (or check for plans it has seen).`, { hl: Object.fromEntries(preorder(plan).map(x => ['n' + x.id, 'split'])) });
+      setMsg(`Loop found after ${n} rewrites.`, true);
+    } else if (n >= 60) {
+      rec('info', 'Stopped after 60 rewrites without reaching a fixpoint.');
+      setMsg('No fixpoint after 60 rewrites.', true);
+    } else {
+      rec('fix', n
+        ? `Fixpoint after ${n} ${n === 1 ? 'rewrite' : 'rewrites'}: no active rule matches anywhere. Cost ${fnum(c0)} → ${fnum(c1)} ${delta(c0, c1)}.`
+        : 'Already at a fixpoint: no active rule matches anywhere in the plan.');
+      setMsg(n ? `Fixpoint after ${n} rewrites.` : 'No rule applies.');
+      if (!n) history.pop();
+    }
+    startSteps();
+  }
+
+  // explain the cost of one operator with the actual numbers
+  function explainOp(n, a) {
+    const out = fnum(a.rows), inR = n.kids.map(rowsOf), co = OPT.model === 'cout';
+    if (n.op === 'scan') return `Seq scan of ${tname(n.rel)}: read all ${out} rows, cost ${fnum(a.local)}.`;
+    if (n.op === 'filter')
+      return `σ ${plist(n.preds)} keeps ${fnum(inR[0])} × ${sels(n.preds)} = ${out} rows. ` +
+        (co ? `It outputs ${out} rows, so it costs ${fnum(a.local)}.` : `It reads ${fnum(inR[0])} rows, so it costs ${fnum(a.local)}.`);
+    if (!n.preds.length)
+      return `Cross product: every one of the ${fnum(inR[0])} left rows meets every one of the ${fnum(inR[1])} right rows, giving ${out} rows. ` +
+        (co ? `Cost ${fnum(a.local)}.` : `Nested loops cost ${fnum(inR[0])} × ${fnum(inR[1])} = ${fnum(a.local)}.`);
+    const outF = `${fnum(inR[0])} × ${fnum(inR[1])} × ${sels(n.preds)} = ${out} rows`;
+    return co ? `Join on ${plist(n.preds)} outputs ${outF}, so it costs ${fnum(a.local)}.`
+      : `Hash join on ${plist(n.preds)}: build a hash table on the right input (2 × ${fnum(inR[1])}) and probe it with the left input (${fnum(inR[0])}), cost ${fnum(a.local)}. It outputs ${outF}.`;
+  }
+
+  function costWalk() {
+    stopPlay();
+    steps = [];
+    const ann = annotate(plan), seen = new Set(), hl = {};
+    (function walk(n) {
+      n.kids.forEach(walk);
+      const a = ann.get(n.id);
+      seen.add(n.id);
+      const sub = n.kids.length ? ` Subtree total ${fnum(a.total)}.` : '';
+      rec('cost', explainOp(n, a) + sub, { hl: { ...hl, ['n' + n.id]: 'visit' }, est: new Set(seen) });
+      hl['n' + n.id] = 'ok';
+    })(plan);
+    const tot = ann.get(plan.id).total;
+    rec('total', `Total estimated cost: ${fnum(tot)}, the sum over all ${preorder(plan).length} operators. The result has ${fnum(rowsOf(plan))} rows.`, { hl, est: new Set(seen) });
+    setMsg(`Plan cost ${fnum(tot)}.`);
+    startSteps();
+  }
+
+  function jumpDeriv(k) {
+    if (!deriv[k] || k === deriv.length - 1) return;
+    stopPlay();
+    pushHistory();
+    plan = deriv[k].plan;
+    deriv = deriv.slice(0, k + 1);
+    if (!findNode(plan, pivotH)) pivotH = plan.id;
+    steps = [];
+    rec('info', `Back to plan #${k + 1} (cost ${fnum(deriv[k].cost)}). The plans after it were dropped; Undo brings them back.`);
+    setMsg('');
+    startSteps();
+  }
+
+  // ---- Cascades operations ----
+  function narrateEvent(e) {
+    const g = grp(memo, e.e.g), ex = exprT(e.e);
+    const links = e.e.kids.map(k => [e.e.id, k, e.type === 'dup' ? 'split' : 'ok']);
+    if (e.type === 'dup' && e.top)
+      return rec('dup', `${ex} is already in group G${e.e.g} as ${e.e.id}. The duplicate is discarded: nothing new.`, { hl: { ['e' + e.e.id]: 'split' }, links });
+    if (e.type === 'dup')
+      return rec('dup', `The sub-expression ${ex} is already in the memo as ${e.e.id}. The duplicate is absorbed: the result just points to group G${e.e.g} ${gname(g)}, and no new group is created.`, { hl: { ['e' + e.e.id]: 'split', ['g' + e.e.g]: 'split' }, links });
+    if (e.type === 'group')
+      return rec('newg', `The sub-expression ${ex} is new and no group holds ${gname(g)} yet, so create group G${e.e.g} with ${e.e.id}.`, { hl: { ['e' + e.e.id]: 'ok', ['g' + e.e.g]: 'ok' }, links });
+    if (!e.top)
+      return rec('add', `The sub-expression ${ex} is new, but group G${e.e.g} already holds the same tables and predicates ${gname(g)}. It joins that group as ${e.e.id}.`, { hl: { ['e' + e.e.id]: 'ok', ['g' + e.e.g]: 'visit' }, links });
+    return rec('add', `${ex} is new: add it to group G${e.e.g} as ${e.e.id}, one more way to compute ${gname(g)}.`, { hl: { ['e' + e.e.id]: 'ok' }, links });
+  }
+
+  function applyMemoOp(eid, key, how = '') {
+    stopPlay();
+    const e = exprById(memo, eid), rule = RULE[key];
+    pushHistory();
+    steps = [];
+    const n0 = countExprs(), g0 = memo.groups.length, d0 = memo.dups;
+    let nb = 0, blocked = 0;
+    const res = [];
+    for (const pat of rule.patterns) for (const b of bindings(memo, e, pat)) for (const v of variants(rule, b)) res.push({ b, v });
+    if (!res.length) {
+      rec('info', `${rule.name} does not match ${eid}.`, { hl: { ['e' + eid]: 'found' } });
+      history.pop();
+      startSteps();
+      return;
+    }
+    for (const { b, v } of res) {
+      nb++;
+      const srcs = bindSrcs(b), hl = {};
+      srcs.forEach(s => { hl['e' + s] = 'visit'; });
+      hl['e' + eid] = 'found';
+      const which = res.length > 1 ? `binding ${nb} of ${res.length}, ` : '';
+      const bound = srcs.length > 1 ? ` with ${srcs.slice(1).map(s => `${s} = ${exprT(exprById(memo, s))}`).join(', ')}` : '';
+      if (v.blocked) {
+        blocked++;
+        srcs.forEach(s => { hl['e' + s] = 'bad'; });
+        rec('block', `${how}${rule.name} on ${eid} (${which}${algT(b)}${bound}) would give ${algT(v.tree)}, but ${v.blocked}, and cross products are switched off. Skipped.`, { hl });
+        continue;
+      }
+      rec('bind', `${how}${rule.name} on ${eid}, ${which}${algT(b)}${bound}. <span class="tx">${rule.formula}</span> gives ${algT(v.tree)}. Copy it into the memo bottom-up.`, { hl, links: srcs.flatMap(s => exprById(memo, s).kids.map(k => [s, k, 'visit'])) });
+      const ev = [];
+      ev.push = x => { Array.prototype.push.call(ev, x); narrateEvent(x); return ev.length; };
+      copyIn(memo, v.tree, e.g, ev, key);
+    }
+    memoBest = null;
+    const added = countExprs() - n0, ng = memo.groups.length - g0, nd = memo.dups - d0;
+    const parts = [`${added} new ${added === 1 ? 'expression' : 'expressions'}`];
+    if (ng) parts.push(`${ng} new ${ng === 1 ? 'group' : 'groups'}`);
+    if (nd) parts.push(`${nd} ${nd === 1 ? 'duplicate' : 'duplicates'} absorbed`);
+    if (blocked) parts.push(`${blocked} blocked`);
+    rec(added ? 'info' : 'dup', `${rule.name} on ${eid}: ${parts.join(', ')}. The memo now has ${memo.groups.length} groups and ${countExprs()} expressions.`, { hl: { ['e' + eid]: 'found' } });
+    setMsg(parts.join(', ') + '.');
+    startSteps();
+  }
+
+  function exploreOp() {
+    stopPlay();
+    const old = memoClone(memo);
+    pushHistory();
+    steps = [];
+    const n0 = countExprs(), g0 = memo.groups.length, d0 = memo.dups;
+    const r = exploreAll(memo, S.active);
+    const added = countExprs() - n0, ng = memo.groups.length - g0, nd = memo.dups - d0;
+    memoBest = null;
+    const hl = {};
+    memo.groups.forEach(g => g.exprs.forEach(e => { if (!exprById(old, e.id)) hl['e' + e.id] = 'ok'; }));
+    rec('explore', added
+      ? `Explored: every active rule was applied to every expression, ${r.passes} passes over the memo, until a pass added nothing. ${added} new ${added === 1 ? 'expression' : 'expressions'} and ${ng} new ${ng === 1 ? 'group' : 'groups'}; ${nd} generated duplicates were absorbed. The memo now holds ${memo.groups.length} groups and ${countExprs()} expressions.${r.capped ? ' Stopped early: the memo grew past 600 expressions.' : ''}`
+      : `Nothing new: the active rules only regenerate expressions the memo already has (${nd} duplicates absorbed).`, { hl });
+    setMsg(added ? `${added} new expressions, ${nd} duplicates absorbed.` : 'The memo is already complete for these rules.');
+    if (!added) history.pop();
+    startSteps();
+  }
+
+  function bestOp() {
+    stopPlay();
+    steps = [];
+    const mc = memoCosts(memo);
+    const costs = new Map(), wins = new Set();
+    const rowsG = g => cardOf(g);
+    for (const g of groupOrder(memo)) {
+      const items = g.exprs.map(e => { const c = mc.exprCost.get(e.id); costs.set(e.id, c.total); return `${e.id} ${fnum(c.total)}`; });
+      const w = mc.best.get(g.id);
+      wins.add(w.e.id);
+      const hl = { ['g' + g.id]: 'visit', ['e' + w.e.id]: 'ok' };
+      const why = g.exprs.length > 1 ? `Compare ${items.join(', ')}: the cheapest is ${w.e.id}.` : `Its only expression ${w.e.id} costs ${fnum(w.cost)}.`;
+      rec('cost', `G${g.id} ${gname(g)}, ${fnum(rowsG(g))} rows. ${why} Every parent that uses G${g.id} will reuse this cost.`, { hl, costs: new Map(costs), wins: new Set(wins), links: w.e.kids.map(k => [w.e.id, k, 'ok']) });
+    }
+    memoBest = mc;
+    const p = extractPlan(memo, mc.best, memo.root);
+    const hl = {}, links = [];
+    (function mark(n) { hl['e' + n.eid] = 'ok'; const e = exprById(memo, n.eid); e.kids.forEach(k => links.push([e.id, k, 'ok'])); n.kids.forEach(mark); })(p);
+    const tot = mc.best.get(memo.root).cost;
+    rec('best', `Best plan in the memo: ${algT(p)}, cost ${fnum(tot)}. It follows the cheapest expression of each group, starting at G${memo.root}.`, { hl, costs: new Map(costs), wins: new Set(wins), links });
+    setMsg(`Best plan cost ${fnum(tot)}.`);
+    startSteps();
+  }
+
+  function memoFromPlan() {
+    stopPlay();
+    pushHistory();
+    steps = [];
+    buildMemo(plan, true);
+    setMsg('');
+    startSteps();
+  }
+
+  function undo() {
+    if (!history.length) return;
+    stopPlay();
+    const s = history.pop();
+    if (s.preset !== S.preset) {
+      S.preset = s.preset;
+      $('presetSel').value = String(s.preset);
+      $('presetNote').innerHTML = preset().note;
+      Q = s.Q;
+      S.active = s.active;
+      OPT.cross = s.cross;
+      syncRuleUI();
+      renderQuery();
+      if (s.mode !== S.mode) setMode(s.mode, false);
+    }
+    plan = s.plan; deriv = s.deriv; memo = s.memo; memoBest = s.memoBest; pivotH = s.pivotH; pivotC = s.pivotC; scriptPos = s.scriptPos;
+    steps = [];
+    rec('info', 'Undo: restored the state before the last change.');
+    setMsg('');
+    startSteps();
+  }
+
+  function setModel(m) {
+    OPT.model = m;
+    memoBest = null;
+    stopPlay();
+    steps = [];
+    rec('info', `Cost model changed. The current plan now costs ${fnum(planCost(plan))}.`, { view: S.mode === 'heur' ? 'plan' : 'memo' });
+    updateModelHint();
+    startSteps();
+  }
+
+  // ---- suggested moves ----
+  function scriptMove() {
+    const sc = preset().script;
+    if (!sc || scriptPos >= sc.length) return null;
+    const s = sc[scriptPos];
+    if (preset().mode === 'heur') {
+      const n = nodeAtPath(plan, s.at);
+      if (!n) return { s, err: true };
+      const vs = variants(RULE[s.rule], n);
+      const vi = s.v || 0;
+      if (!vs[vi] || vs[vi].blocked) return { s, err: true };
+      return { s, m: { rule: RULE[s.rule], node: n, v: vs[vi], vi, plan: replaceAt(plan, n.id, vs[vi].tree) } };
+    }
+    const e = exprById(memo, s.at);
+    return { s, e, err: !e };
+  }
+  function runScript() {
+    const sm = scriptMove();
+    if (!sm) return;
+    if (sm.err) { setMsg('The suggested move no longer applies to the current state. Reload the example to replay the suggestions.', true); return; }
+    const sc = preset().script, pos = scriptPos;
+    const how = `Suggested move ${pos + 1} of ${sc.length}: `;
+    if (S.mode !== preset().mode) setMode(preset().mode, false);
+    if (sm.m) {
+      stopPlay();
+      pushHistory();
+      scriptPos = pos + 1;
+      steps = [];
+      pivotH = sm.m.node.id;
+      doMove(sm.m, how);
+      setMsg('');
+      startSteps();
+    } else {
+      const h = history.length;
+      pivotC = sm.s.at;
+      applyMemoOp(sm.s.at, sm.s.rule, how);
+      if (history.length > h) { scriptPos = pos + 1; updateScript(); }
+    }
+  }
+
+  function setMsg(text, isErr) { const m = $('msg'); m.textContent = text; m.classList.toggle('err', !!isErr); }
+
+  // ---------- layout & drawing ----------
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const f1 = v => v.toFixed(1);
+  const MONO = 9.05, MONO_S = 7.6, SANS = 8.1, EST = 7.2;
+
+  function planBox(n, showEst, a) {
+    const head = n.op === 'scan' ? 'Seq scan' : n.op === 'filter' ? 'σ Filter'
+      : !n.preds.length ? '× Cross product' : OPT.model === 'hash' ? '⋈ Hash join' : '⋈ Join';
+    const lines = n.op === 'scan' ? [{ pl: '', t: tname(n.rel) }] : n.preds.map(p => ({ pl: p, t: Q.preds[p].text }));
+    const lw = Math.max(0, ...lines.map(l => (l.pl ? (l.pl.length + 1) * MONO_S : 0) + l.t.length * MONO));
+    const ew = showEst ? (5 + Math.max(fnum(a.rows).length, fnum(a.total).length)) * EST : 0;
+    const w = Math.max(110, head.length * SANS, lw, ew) + 26;
+    const h = 30 + lines.length * 21 + (showEst ? 38 : 0) + 4;
+    return { head, lines, w, h, xp: n.op === 'join' && !n.preds.length };
+  }
+
+  function planLayout(root, st) {
+    const showEst = S.showEst || !!st.est;
+    const sizes = new Map(), dh = [], sw = new Map();
+    const HG = 20, VG = 46;
+    const ann = annotate(root);
+    (function measure(n, d) {
+      const b = planBox(n, showEst, ann.get(n.id));
+      sizes.set(n.id, b);
+      dh[d] = Math.max(dh[d] || 0, b.h);
+      n.kids.forEach(k => measure(k, d + 1));
+      const kw = n.kids.reduce((s, k) => s + sw.get(k.id), 0) + HG * Math.max(0, n.kids.length - 1);
+      sw.set(n.id, Math.max(b.w, kw));
+    })(root, 0);
+    const ys = []; let y = 0;
+    dh.forEach((h, d) => { ys[d] = y; y += h + VG; });
+    const pos = new Map();
+    (function place(n, left, d) {
+      const b = sizes.get(n.id), W = sw.get(n.id), cx = left + W / 2;
+      const kw = n.kids.reduce((s, k) => s + sw.get(k.id), 0) + HG * Math.max(0, n.kids.length - 1);
+      let x = cx - kw / 2;
+      n.kids.forEach(k => { place(k, x, d + 1); x += sw.get(k.id) + HG; });
+      pos.set('n' + n.id, { id: 'n' + n.id, nid: n.id, x: cx - b.w / 2, y: ys[d], w: b.w, h: b.h, b, kids: n.kids.map(k => 'n' + k.id),
+        est: showEst && (!st.est || st.est.has(n.id)) ? ann.get(n.id) : null, showEst });
+    })(root, 0, 0);
+    return pos;
+  }
+
+  function memoLayout(groups, st) {
+    const CH = 30, CG = 5, HEAD = 46, GP = 10, HG = 28, VG = 56;
+    const pos = new Map();
+    const rows = new Map();
+    for (const g of groups) {
+      // one row per number of tables; groups made only of selections sit just above their input
+      const k = g.rels.length * 2 + (g.exprs.every(e => e.op === 'filter') ? 1 : 0);
+      if (!rows.has(k)) rows.set(k, []);
+      rows.get(k).push(g);
+    }
+    const keys = [...rows.keys()].sort((a, b) => b - a);
+    const costs = st.costs, wins = st.wins;
+    const chipW = e => {
+      const t = exprText(e).replace(/<sub>(.*?)<\/sub>/g, (_, s) => '\u0001'.repeat(Math.ceil(s.length * 0.75)));
+      const side = costs && costs.has(e.id) ? fnum(costs.get(e.id)).length + 2 : (e.from || '').length;
+      return 12 + e.id.length * 7.4 + 10 + t.length * 8.8 + 16 + side * 6.6 + 10;
+    };
+    let y = 0, maxW = 0;
+    const rowItems = keys.map(k => {
+      const gs = rows.get(k).sort((a, b) => a.id - b.id);
+      const boxes = gs.map(g => {
+        const w = Math.max(170, gname(g).length * 7.6 + 70, ...g.exprs.map(chipW)) + GP * 2;
+        const h = HEAD + g.exprs.length * (CH + CG) + GP - CG + 2;
+        return { g, w, h };
+      });
+      const rw = boxes.reduce((s, b) => s + b.w, 0) + HG * (boxes.length - 1);
+      maxW = Math.max(maxW, rw);
+      const rh = Math.max(...boxes.map(b => b.h));
+      const r = { boxes, rw, rh, y };
+      y += rh + VG;
+      return r;
+    });
+    for (const r of rowItems) {
+      let x = (maxW - r.rw) / 2;
+      for (const { g, w, h } of r.boxes) {
+        pos.set('g' + g.id, { id: 'g' + g.id, kind: 'group', g, x, y: r.y, w, h });
+        g.exprs.forEach((e, i) => {
+          pos.set('e' + e.id, { id: 'e' + e.id, kind: 'chip', e, x: x + GP, y: r.y + HEAD + i * (CH + CG), w: w - GP * 2, h: CH,
+            cost: costs && costs.get(e.id), win: wins && wins.has(e.id) });
+        });
+        x += w + HG;
+      }
+    }
+    return pos;
+  }
+
+  function tween(target, from, t) {
+    const items = [];
+    for (const [id, p] of target) {
+      const o = from && from.get(id);
+      items.push(o ? { ...p, x: lerp(o.x, p.x, t), y: lerp(o.y, p.y, t), w: lerp(o.w, p.w, t), h: lerp(o.h, p.h, t), op: 1 }
+                   : { ...p, op: from ? t : 1 });
+    }
+    if (from) for (const [id, o] of from) if (!target.has(id)) items.push({ ...o, op: 1 - t, gone: true });
+    return items;
+  }
+
+  function drawPlanNode(it, cls) {
+    const b = it.b;
+    let g = `<g class="pnode${cls}" data-nid="${it.nid}" transform="translate(${f1(it.x)},${f1(it.y)})" opacity="${it.op.toFixed(3)}">`;
+    g += `<rect class="frame" width="${f1(it.w)}" height="${f1(it.h)}" rx="8"/>`;
+    g += `<text class="head${b.xp ? ' xp' : ''}" x="13" y="21">${esc(b.head)}</text>`;
+    b.lines.forEach((l, i) => {
+      g += `<text class="ln" x="13" y="${44 + i * 21}">${l.pl ? `<tspan class="pl">${l.pl} </tspan>` : ''}${esc(l.t)}</text>`;
+    });
+    if (it.est) g += `<text class="est" x="13" y="${f1(it.h - 27)}">rows ${fnum(it.est.rows)}</text><text class="est" x="13" y="${f1(it.h - 9)}">cost ${fnum(it.est.total)}</text>`;
+    g += `<rect class="outline" width="${f1(it.w)}" height="${f1(it.h)}" rx="8"/></g>`;
+    return g;
+  }
+
+  function drawGroup(it, cls) {
+    const g = it.g;
+    return `<g class="gbox${cls}" transform="translate(${f1(it.x)},${f1(it.y)})" opacity="${it.op.toFixed(3)}">` +
+      `<rect class="frame" width="${f1(it.w)}" height="${f1(it.h)}" rx="9"/>` +
+      `<text class="gtitle" x="11" y="20">G${g.id}</text>` +
+      `<text class="gsub" x="${11 + String(g.id).length * 9.2 + 22}" y="20">${esc(gname(g))}</text>` +
+      `<text class="grows" x="11" y="38">${fnum(cardOf(g))} rows${g.preds.length ? ' · ' + g.preds.join(' ') : ''}</text>` +
+      `<rect class="outline" width="${f1(it.w)}" height="${f1(it.h)}" rx="9"/></g>`;
+  }
+
+  function drawChip(it, cls) {
+    const e = it.e;
+    const t = exprText(e).replace(/<sub>(.*?)<\/sub>/g, '<tspan class="sub" dy="4">$1</tspan><tspan dy="-4">​</tspan>').replace('×', '<tspan class="xp">×</tspan>');
+    const side = it.cost != null ? `${it.win ? '★ ' : ''}${fnum(it.cost)}` : (e.from === 'plan' ? '' : e.from);
+    const idw = 12 + e.id.length * 7.4 + 8;
+    return `<g class="chip${cls}" data-eid="${e.id}" transform="translate(${f1(it.x)},${f1(it.y)})" opacity="${it.op.toFixed(3)}">` +
+      `<title>${e.id}: ${exprText(e).replace(/<\/?sub>/g, ' ').replace(/\s+/g, ' ')}${e.from && e.from !== 'plan' ? ' (created by ' + RULE[e.from].name + ')' : ' (from the initial plan)'}</title>` +
+      `<rect class="frame" width="${f1(it.w)}" height="${f1(it.h)}" rx="6"/>` +
+      `<text class="cid" x="9" y="19.5">${e.id}</text>` +
+      `<text class="ctext" x="${f1(idw)}" y="20">${t}</text>` +
+      (side ? `<text class="cside${it.win ? ' win' : ''}" x="${f1(it.w - 8)}" y="19.5">${esc(side)}</text>` : '') +
+      `<rect class="outline" width="${f1(it.w)}" height="${f1(it.h)}" rx="6"/></g>`;
+  }
+
+  function render(target, from, t, st) {
+    const items = tween(target, from, t);
+    const byId = new Map(items.map(it => [it.id, it]));
+    let minX = Infinity, maxX = -Infinity, maxY = 0, minY = 0;
+    for (const it of items) { minX = Math.min(minX, it.x); maxX = Math.max(maxX, it.x + it.w); maxY = Math.max(maxY, it.y + it.h); }
+    if (!items.length) { minX = 0; maxX = 200; maxY = 100; }
+    const hl = { ...st.hl };
+    const live = cur === steps.length - 1;
+    let edges = '', nodes = '', chips = '', links = '';
+    if (st.view === 'plan') {
+      if (live && pivotH != null && !hl['n' + pivotH]) hl['n' + pivotH] = 'found';
+      for (const it of items) {
+        if (it.gone) { nodes += drawPlanNode(it, ''); continue; }
+        it.kids.forEach(cid => {
+          const c = byId.get(cid); if (!c) return;
+          const x1 = it.x + it.w / 2, y1 = it.y + it.h, x2 = c.x + c.w / 2, y2 = c.y, my = (y1 + y2) / 2;
+          edges += `<path class="edge" opacity="${Math.min(it.op, c.op).toFixed(3)}" d="M${f1(x1)} ${f1(y1)} C${f1(x1)} ${f1(my)} ${f1(x2)} ${f1(my)} ${f1(x2)} ${f1(y2)}"/>`;
+        });
+        nodes += drawPlanNode(it, hl[it.id] ? ' s-' + hl[it.id] : '');
+      }
+    } else {
+      const ls = (st.links || []).slice();
+      if (live && pivotC && byId.has('e' + pivotC)) {
+        if (!hl['e' + pivotC]) hl['e' + pivotC] = 'found';
+        const pe = byId.get('e' + pivotC).e;
+        if (!ls.length) pe.kids.forEach(k => ls.push([pivotC, k, 'found']));
+      }
+      for (const it of items) {
+        const cls = !it.gone && hl[it.id] ? ' s-' + hl[it.id] : '';
+        if (it.kind === 'group') nodes += drawGroup(it, cls); else chips += drawChip(it, cls);
+      }
+      for (const [eid, gid, c] of ls) {
+        const a = byId.get('e' + eid), b = byId.get('g' + gid);
+        if (!a || !b) continue;
+        const bx = b.x + b.w / 2, toRight = bx >= a.x + a.w / 2;
+        const sx = toRight ? a.x + a.w : a.x, sy = a.y + a.h / 2;
+        const ex = bx, ey = b.y;
+        const op = Math.min(a.op, b.op).toFixed(3);
+        const c1x = sx + (toRight ? 40 : -40), c2y = ey - Math.max(30, (ey - sy) * 0.5);
+        links += `<path class="link l-${c}" opacity="${op}" d="M${f1(sx)} ${f1(sy)} C${f1(c1x)} ${f1(sy)} ${f1(ex)} ${f1(c2y)} ${f1(ex)} ${f1(ey)}"/>` +
+          `<circle class="ldot l-${c}" opacity="${op}" cx="${f1(ex)}" cy="${f1(ey)}" r="4"/>`;
+      }
+    }
+    const vbX = minX - PAD, vbW = (maxX - minX) + PAD * 2, vbH = maxY - minY + PAD * 2;
+    const svg = $('svg');
+    svg.setAttribute('viewBox', `${f1(vbX)} ${f1(minY - PAD)} ${f1(vbW)} ${f1(vbH)}`);
+    const avail = Math.max(200, $('stage').clientWidth - 34);
+    const scale = Math.min(Math.max(avail / vbW, 0.4), 1.1) * S.zoom;
+    svg.style.width = f1(vbW * scale) + 'px';
+    svg.style.height = f1(vbH * scale) + 'px';
+    svg.innerHTML = edges + nodes + links + chips;
+  }
+
+  // a layout remembers its view and query, so a switch between them fades instead of morphing
+  function layoutOf(st) {
+    const pos = st.view === 'plan' ? planLayout(st.plan, st) : memoLayout(st.groups, st);
+    pos.view = st.view; pos.q = Q;
+    return pos;
+  }
+
+  // ---------- step playback ----------
+  const TAGS = {
+    info: ['Info', 'info'], match: ['Match', 'visit'], apply: ['Rewrite', 'ok'], worse: ['Costlier', 'bad'],
+    loop: ['Loop', 'split'], stuck: ['Local min', 'bad'], fix: ['Fixpoint', 'ok'], cost: ['Cost', 'visit'],
+    total: ['Total', 'found'], copy: ['Copy in', 'ok'], bind: ['Binding', 'visit'], newg: ['New group', 'ok'],
+    add: ['New expr', 'ok'], dup: ['Duplicate', 'split'], block: ['Blocked', 'bad'], best: ['Best plan', 'ok'],
+    explore: ['Explore', 'ok']
+  };
+  const tagHtml = kind => `<span class="tag t-${TAGS[kind][1]}">${TAGS[kind][0]}</span>`;
+
+  function renderLog() {
+    $('log').innerHTML = steps.map((s, i) =>
+      `<li data-i="${i}" tabindex="0"><span class="n">${i + 1}</span>${tagHtml(s.kind)}<span>${s.msg}</span></li>`).join('');
+  }
+
+  function startSteps() {
+    renderLog();
+    refreshPanels();
+    if (S.animate && steps.length > 1) {
+      showStep(0);
+      playing = true; updatePlayBtn(); schedule();
+    } else {
+      showStep(steps.length - 1);
+    }
+  }
+
+  function showStep(i, animate = true) {
+    i = Math.max(0, Math.min(steps.length - 1, i));
+    cur = i;
+    const st = steps[i];
+    const target = layoutOf(st);
+    const from = shownPos && shownPos.view === target.view && shownPos.q === target.q ? shownPos : null;
+    cancelAnimationFrame(rafId);
+    updateChrome(st);
+    const dur = (!animate || !from || reduceMotion.matches) ? 0 : Math.min(500, S.speed * 0.5);
+    shownPos = target;
+    if (!dur) { render(target, null, 1, st); return; }
+    const t0 = performance.now();
+    const tick = now => {
+      const t = Math.min(1, (now - t0) / dur);
+      const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      render(target, from, e, st);
+      if (t < 1) rafId = requestAnimationFrame(tick);
+    };
+    render(target, from, 0, st);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function redraw() { cancelAnimationFrame(rafId); if (steps.length) { shownPos = layoutOf(steps[cur]); render(shownPos, null, 1, steps[cur]); } }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (!playing) return;
+    if (cur >= steps.length - 1) { playing = false; updatePlayBtn(); return; }
+    timer = setTimeout(() => { showStep(cur + 1); schedule(); }, S.speed);
+  }
+  function stopPlay() { playing = false; clearTimeout(timer); updatePlayBtn(); }
+  function togglePlay() {
+    if (playing) { stopPlay(); return; }
+    if (cur >= steps.length - 1) showStep(0);
+    playing = true; updatePlayBtn(); schedule();
+  }
+  function go(i) { stopPlay(); showStep(i); }
+
+  function updatePlayBtn() {
+    const b = $('playBtn');
+    b.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    b.innerHTML = playing
+      ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg>';
+    b.disabled = steps.length < 2;
+  }
+
+  function updateChrome(st) {
+    $('caption').innerHTML = tagHtml(st.kind) + st.msg;
+    $('counter').textContent = `Step ${cur + 1} of ${steps.length}`;
+    $('firstBtn').disabled = $('prevBtn').disabled = cur === 0;
+    $('nextBtn').disabled = $('lastBtn').disabled = cur >= steps.length - 1;
+    updatePlayBtn();
+    $('undoBtn').disabled = !history.length;
+    const log = $('log');
+    log.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
+    const li = log.children[cur];
+    if (li) {
+      li.classList.add('active');
+      const box = $('logBox');
+      if (li.offsetTop < box.scrollTop || li.offsetTop + li.offsetHeight > box.scrollTop + box.clientHeight)
+        box.scrollTop = li.offsetTop - box.clientHeight / 2;
+    }
+  }
+
+  // ---------- panels ----------
+  function refreshPanels() {
+    updateStats();
+    renderMoves();
+    renderSide();
+    updateScript();
+    $('undoBtn').disabled = !history.length;
+  }
+
+  function updateStats() {
+    const set = (i, label, v) => { $('st' + i + 'l').textContent = label; $('st' + i).textContent = v; };
+    if (S.mode === 'heur') {
+      $('statsTitle').textContent = 'Current plan';
+      set(1, 'Cost', fnum(planCost(plan)));
+      set(2, 'Rows out', fnum(rowsOf(plan)));
+      set(3, 'Cross products', crossCount(plan));
+      set(4, 'Plans visited', deriv.length);
+    } else {
+      $('statsTitle').textContent = 'Memo';
+      set(1, 'Groups', memo.groups.length);
+      set(2, 'Expressions', countExprs());
+      set(3, 'Duplicates absorbed', memo.dups);
+      set(4, 'Best cost', memoBest ? fnum(memoBest.best.get(memo.root).cost) : '–');
+    }
+  }
+
+  function moveRow(m, cur0, showAt, off) {
+    const blocked = m.v.blocked;
+    const name = `<span class="mn">${m.rule.name}</span>${m.v.label ? ` <span class="mvar">${m.v.label}</span>` : ''}`;
+    const at = showAt ? `<span class="mat">at ${algT(m.node)}</span>` : '';
+    const right = blocked ? `<span class="mc">blocked: ${blocked}</span><span></span>`
+      : `<span class="mc">${fnum(m.cost)}</span><span class="md">${delta(cur0, m.cost)}</span>`;
+    return `<li><button type="button" class="mv${off ? ' off' : ''}${blocked ? ' blocked' : ''}" data-mi="${m.mi}"${off || blocked ? ' disabled' : ''} title="${off ? 'This rule is not in the active rule set' : ''}"><span>${name}</span>${right}${at}</button></li>`;
+  }
+
+  let shownMoves = [];
+  function renderMoves() {
+    const body = $('movesBody');
+    if (S.mode === 'casc') { renderMemoMoves(); return; }
+    $('scopeNode').setAttribute('aria-pressed', String(S.scope === 'node'));
+    $('scopeAll').setAttribute('aria-pressed', String(S.scope === 'all'));
+    const c0 = planCost(plan);
+    let html = '';
+    if (S.scope === 'node') {
+      const n = findNode(plan, pivotH) || plan;
+      shownMoves = [];
+      for (const rule of RULES) variants(rule, n).forEach((v, vi) => {
+        const p = replaceAt(plan, n.id, v.tree);
+        shownMoves.push({ rule, node: n, v, vi, plan: p, cost: v.blocked ? NaN : planCost(p), off: !S.active.has(rule.key) });
+      });
+      shownMoves.forEach((m, i) => { m.mi = i; });
+      const on = shownMoves.filter(m => !m.off), off = shownMoves.filter(m => m.off);
+      html = `<p class="empty">Pivot: ${algT(n)}</p>`;
+      html += on.length ? `<ul class="moves">${on.map(m => moveRow(m, c0, false, false)).join('')}</ul>`
+        : `<p class="empty">No active rule matches this node. ${off.length ? '' : 'Click another node in the plan.'}</p>`;
+      if (off.length) html += `<p class="empty">Rules that would match here but are not ticked:</p><ul class="moves">${off.map(m => moveRow(m, c0, false, true)).join('')}</ul>`;
+    } else {
+      shownMoves = allMoves(plan, S.active).sort((a, b) => (a.v.blocked ? 1 : 0) - (b.v.blocked ? 1 : 0) || a.cost - b.cost);
+      shownMoves.forEach((m, i) => { m.mi = i; });
+      const better = shownMoves.filter(m => !m.v.blocked && m.cost < c0 - 1e-9).length;
+      html = `<p class="empty">${shownMoves.length} moves from this plan (cost ${fnum(c0)}); ${better ? `${better} of them ${better === 1 ? 'lowers' : 'lower'} the cost.` : '<b>none lowers the cost: a local minimum</b> for this rule set.'}</p>`;
+      html += `<ul class="moves">${shownMoves.map(m => moveRow(m, c0, true, false)).join('')}</ul>`;
+    }
+    body.innerHTML = html;
+  }
+
+  function renderMemoMoves() {
+    const body = $('movesBody');
+    const e = pivotC && exprById(memo, pivotC);
+    if (!e) { body.innerHTML = '<p class="empty">Click an expression in the memo to choose the pivot.</p>'; return; }
+    let html = `<p class="empty">Pivot: ${e.id} = ${exprT(e)} in group G${e.g} ${gname(grp(memo, e.g))}</p><ul class="moves">`;
+    let any = false;
+    shownMoves = [];
+    for (const rule of RULES) {
+      const nb = rule.patterns.reduce((s, p) => s + bindings(memo, e, p).length, 0);
+      if (!nb) continue;
+      // dry run on a copy of the memo to preview what the rule would add
+      const tmp = memoClone(memo), res = applyMemoRule(tmp, exprById(tmp, e.id), rule);
+      if (!res.length) continue;
+      any = true;
+      const evs = res.flatMap(r => r.ev);
+      const nNew = evs.filter(x => x.type !== 'dup').length, nDup = evs.filter(x => x.type === 'dup').length, nBl = res.filter(r => r.v.blocked).length;
+      const parts = [];
+      if (nNew) parts.push(`${nNew} new`);
+      if (nDup) parts.push(`${nDup} duplicate${nDup === 1 ? '' : 's'}`);
+      if (nBl) parts.push(`${nBl} blocked`);
+      const off = !S.active.has(rule.key);
+      const mi = shownMoves.push({ rule, e }) - 1;
+      html += `<li><button type="button" class="mv${off ? ' off' : ''}" data-mi="${mi}"${off ? ' disabled' : ''}><span><span class="mn">${rule.name}</span> <span class="mvar">${res.length} binding${res.length === 1 ? '' : 's'}</span></span>` +
+        `<span class="mc">${parts.join(', ')}</span><span></span><span class="mat tx">${rule.formula}</span></button></li>`;
+    }
+    html += '</ul>';
+    body.innerHTML = any ? html : `<p class="empty">Pivot: ${e.id} = ${exprT(e)}. No rule matches this expression.</p>`;
+  }
+
+  function renderSide() {
+    if (S.mode === 'heur') {
+      $('deriv').innerHTML = deriv.map((d, i) => {
+        const dl = i ? delta(deriv[i - 1].cost, d.cost) : '';
+        return `<li data-k="${i}" tabindex="0" class="${i === deriv.length - 1 ? 'active' : ''}"><span class="n">#${i + 1}</span><span>${d.label}</span><span class="c">${fnum(d.cost)} ${dl}</span>` +
+          (d.loopOf >= 0 ? `<span class="loopnote"><span class="tag t-split">Loop</span> same plan as #${d.loopOf + 1}</span>` : '') + '</li>';
+      }).join('');
+      const box = $('sideBody');
+      box.scrollTop = box.scrollHeight;
+    } else {
+      if (!memoBest) { $('bestText').innerHTML = '<p class="empty">Press <b>Find best plan</b> to cost every expression bottom-up and keep the cheapest one in each group.</p>'; return; }
+      const p = extractPlan(memo, memoBest.best, memo.root);
+      const lines = [];
+      (function show(n, d) {
+        const e = exprById(memo, n.eid), g = grp(memo, e.g);
+        const name = n.op === 'scan' ? `Seq scan ${tname(n.rel)}` : n.op === 'filter' ? `Filter ${n.preds.map(x => esc(Q.preds[x].text)).join(' AND ')}`
+          : n.preds.length ? `${OPT.model === 'hash' ? 'Hash join' : 'Join'} ${n.preds.map(x => esc(Q.preds[x].text)).join(' AND ')}` : 'Cross product';
+        lines.push(`<div class="bl" style="padding-left:${d * 18}px"><span class="bn">${d ? '→ ' : ''}${name}</span><span class="bm"><b>${e.id}</b> · ${fnum(cardOf(g))} rows · cost ${fnum(memoBest.exprCost.get(e.id).total)}</span></div>`);
+        n.kids.forEach(k => show(k, d + 1));
+      })(p, 0);
+      $('bestText').innerHTML = `<p>Cost ${fnum(memoBest.best.get(memo.root).cost)}. Each line is the cheapest expression of its group:</p>` + lines.join('');
+    }
+  }
+
+  function updateScript() {
+    const p = preset(), sc = p.script;
+    $('scriptBox').hidden = !sc || S.mode !== p.mode;
+    if (!sc) return;
+    if (scriptPos >= sc.length) {
+      $('scriptBtn').disabled = true;
+      $('scriptNext').textContent = 'All suggested moves done. Reload the example to replay them.';
+      return;
+    }
+    const sm = scriptMove(), s = sc[scriptPos];
+    $('scriptBtn').disabled = !!sm.err;
+    $('scriptBtn').textContent = `Next suggested move (${scriptPos + 1} of ${sc.length})`;
+    $('scriptNext').innerHTML = sm.err ? 'The plan has changed, so the suggestion no longer applies. Reload the example to replay it.'
+      : sm.m ? `${RULE[s.rule].name} at ${algT(sm.m.node)}` : `${RULE[s.rule].name} on ${s.at} = ${exprT(sm.e)}`;
+  }
+
+  function renderQuery() {
+    const p = preset();
+    const w = Object.keys(Q.preds).map(k => Q.preds[k].text);
+    let sql = `<span class="kw">SELECT</span> *\n<span class="kw">FROM</span>   ${p.from.map(r => `${TABLES[r].name} ${r}`).join(', ')}\n<span class="kw">WHERE</span>  ${esc(w[0])}`;
+    for (const x of w.slice(1)) sql += `\n  <span class="kw">AND</span>  ${esc(x)}`;
+    $('sql').innerHTML = sql;
+    $('relInfo').innerHTML = p.from.map(r => `<span class="t"><b>${TABLES[r].name} ${r}</b>(${TABLES[r].cols}) · ${fnum(TABLES[r].card)} rows</span>`).join('');
+    $('predInfo').innerHTML = Object.entries(Q.preds).map(([id, x]) => `<span class="t"><span class="pl">${id}</span><span class="pt">${esc(x.text)}</span> <span class="sel">sel ${x.selText}</span></span>`).join('');
+  }
+
+  function syncRuleUI() {
+    $('ruleList').innerHTML = RULES.map((r, i) =>
+      `<li><label><input type="checkbox" data-rule="${r.key}"${S.active.has(r.key) ? ' checked' : ''}><span class="num">${i + 1}</span><span class="rn">${r.name}</span><span class="rf">${r.formula}</span></label></li>`).join('');
+    $('crossChk').checked = OPT.cross;
+  }
+
+  function updateModelHint() {
+    $('modelHint').innerHTML = OPT.model === 'hash'
+      ? 'Each operator costs the tuples it touches. Seq scan: |R|. Filter: its input. Hash join: |left| + 2·|right| (the right input is built into a hash table). A join without a predicate is a cross product done by nested loops: |left| × |right|.'
+      : 'Each operator costs the number of rows it outputs (C_out). Join order then matters only through the sizes of intermediate results, so commutativity never changes the cost.';
+  }
+
+  function updateRulesText() {
+    $('rules').innerHTML = S.mode === 'heur'
+      ? '<b>Heuristic (transformational) optimization:</b> one plan at a time. Click a node to make it the pivot, then apply a rewrite rule there. Every rewrite keeps the result the same; only the estimated cost changes.'
+      : '<b>Cascades:</b> the memo stores groups of equivalent expressions, with inputs that point to groups. A rule adds alternatives to a group; a hash table catches any expression the memo already has.';
+  }
+
+  // ---------- wiring ----------
+  PRESETS.forEach((p, i) => $('presetSel').insertAdjacentHTML('beforeend', `<option value="${i}">${p.title}</option>`));
+  $('presetSel').addEventListener('change', e => loadPreset(+e.target.value));
+  $('resetBtn').addEventListener('click', () => loadPreset(S.preset));
+  $('undoBtn').addEventListener('click', undo);
+  $('modeH').addEventListener('click', () => { if (S.mode !== 'heur') setMode('heur'); });
+  $('modeC').addEventListener('click', () => { if (S.mode !== 'casc') setMode('casc'); });
+  $('greedyStepBtn').addEventListener('click', () => greedy(false));
+  $('greedyRunBtn').addEventListener('click', () => greedy(true));
+  $('fixBtn').addEventListener('click', fixpoint);
+  $('costBtn').addEventListener('click', costWalk);
+  $('exploreBtn').addEventListener('click', exploreOp);
+  $('bestBtn').addEventListener('click', bestOp);
+  $('memoFromPlanBtn').addEventListener('click', memoFromPlan);
+  $('scriptBtn').addEventListener('click', runScript);
+  $('ruleList').addEventListener('change', e => {
+    const k = e.target.dataset.rule; if (!k) return;
+    if (e.target.checked) S.active.add(k); else S.active.delete(k);
+    refreshPanels();
+  });
+  $('crossChk').addEventListener('change', e => { OPT.cross = e.target.checked; refreshPanels(); });
+  $('modelSel').addEventListener('change', e => setModel(e.target.value));
+  $('estChk').addEventListener('change', e => { S.showEst = e.target.checked; redraw(); });
+  $('animChk').addEventListener('change', e => { S.animate = e.target.checked; if (!S.animate) stopPlay(); });
+  $('speed').addEventListener('input', e => { S.speed = +e.target.value; $('speedOut').textContent = (S.speed / 1000).toFixed(1) + ' s'; });
+  $('zoom').addEventListener('input', e => { S.zoom = +e.target.value / 100; $('zoomOut').textContent = e.target.value + '%'; redraw(); });
+  $('scopeNode').addEventListener('click', () => { S.scope = 'node'; renderMoves(); });
+  $('scopeAll').addEventListener('click', () => { S.scope = 'all'; renderMoves(); });
+
+  $('movesBody').addEventListener('click', e => {
+    const b = e.target.closest('button.mv'); if (!b || b.disabled) return;
+    const m = shownMoves[+b.dataset.mi]; if (!m) return;
+    if (S.mode === 'heur') { pivotH = m.node.id; applyMoveOp(m); }
+    else applyMemoOp(m.e.id, m.rule.key);
+  });
+  $('deriv').addEventListener('click', e => { const li = e.target.closest('li'); if (li) jumpDeriv(+li.dataset.k); });
+  $('deriv').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('li'); if (li) { e.preventDefault(); jumpDeriv(+li.dataset.k); } }
+  });
+
+  $('firstBtn').addEventListener('click', () => go(0));
+  $('prevBtn').addEventListener('click', () => go(cur - 1));
+  $('nextBtn').addEventListener('click', () => go(cur + 1));
+  $('lastBtn').addEventListener('click', () => go(steps.length - 1));
+  $('playBtn').addEventListener('click', togglePlay);
+
+  $('log').addEventListener('click', e => { const li = e.target.closest('li'); if (li) go(+li.dataset.i); });
+  $('log').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('li'); if (li) { e.preventDefault(); go(+li.dataset.i); } }
+  });
+  // clicking the drawing chooses the pivot; it jumps to the live state first
+  $('svg').addEventListener('click', e => {
+    const pn = e.target.closest('.pnode'), ch = e.target.closest('.chip');
+    if (pn && S.mode === 'heur') {
+      const id = +pn.dataset.nid;
+      if (!findNode(plan, id)) return;
+      pivotH = id;
+    } else if (ch && S.mode === 'casc') {
+      if (!exprById(memo, ch.dataset.eid)) return;
+      pivotC = ch.dataset.eid;
+    } else return;
+    stopPlay();
+    if (cur !== steps.length - 1) showStep(steps.length - 1, false); else redraw();
+    renderMoves();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, select, textarea, button, li')) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); }
+    else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+  });
+
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(redraw, 80); });
+
+  // theme toggle
+  const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => {
+    const a = document.documentElement.getAttribute('data-theme');
+    return a ? a === 'dark' : darkMQ.matches;
+  };
+  const syncThemeBtn = () => { $('themeBtn').textContent = isDark() ? 'Light mode' : 'Dark mode'; };
+  try { const saved = localStorage.getItem('qopt-theme'); if (saved) document.documentElement.setAttribute('data-theme', saved); } catch (e) {}
+  $('themeBtn').addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('qopt-theme', next); } catch (e) {}
+    syncThemeBtn();
+  });
+  darkMQ.addEventListener && darkMQ.addEventListener('change', syncThemeBtn);
+  syncThemeBtn();
+
+  updateModelHint();
+  loadPreset(0, false);
+  history = [];
+  refreshPanels();
+})();
+</script>
+</body>
+</html>
