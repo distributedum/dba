@@ -43,6 +43,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | T5 | 22/10/26 | Execution. | [pdf](materials/04-relational.pdf) [zip](materials/exec.zip) | B1 15; P2 |
 | T6 |  | Cost estimation. | [pdf](materials/06-relational.pdf) | B1 16; B3 5; P3 |
 | T7 |  | Optimization. | [pdf](materials/07-relational.pdf) [demo](materials/queryopt.html) | B1 16; B3 2,4 |
+| PL5 | 29/10/26 | Optimization. | [pdf](materials/lab4.pdf) | |
 
 ## Bibliography
 
