@@ -1,0 +1,1862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crash Recovery Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: control rail on the left; on the right, step narration above a stage with Memory, Disk and Log drawn as horizontal vectors */
+:root {
+  --bg: #ffffff; --panel: #ffffff; --ink: #222222; --muted: #6f6f6f; --line: #e5e5e5;
+  --box: #ececec; --accent: #267cb9; --accent-hover: #006699; --on-accent: #ffffff;
+  --node: #ffffff; --node-stroke: #444444; --slot-empty: #eff1f3; --edge: #9aa0a6; --dot: rgba(0, 0, 0, .08);
+  --visit: #2a66c9; --visit-bg: #e2ebfa;
+  --ok: #1d8048; --ok-bg: #dcf1e3;
+  --bad: #c3362b; --bad-bg: #fbe1de;
+  --found: #a86400; --found-bg: #fcecc9;
+  --split: #7448bd; --split-bg: #ece4f9;
+  --undo: #b0306f; --undo-bg: #f9e0ec;
+  --redo: #0a7c87; --redo-bg: #d6f0f2;
+  --font-display: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+    --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+    --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+    --visit: #7eaaf6; --visit-bg: #1b2943;
+    --ok: #5dca8b; --ok-bg: #163222;
+    --bad: #f27c70; --bad-bg: #3d1c19;
+    --found: #f2b74e; --found-bg: #3a2b0f;
+    --split: #b597f2; --split-bg: #2a2142;
+    --undo: #f07ab3; --undo-bg: #3a1828;
+    --redo: #4cc8d2; --redo-bg: #102f35;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+  --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+  --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+  --visit: #7eaaf6; --visit-bg: #1b2943;
+  --ok: #5dca8b; --ok-bg: #163222;
+  --bad: #f27c70; --bad-bg: #3d1c19;
+  --found: #f2b74e; --found-bg: #3a2b0f;
+  --split: #b597f2; --split-bg: #2a2142;
+  --undo: #f07ab3; --undo-bg: #3a1828;
+  --redo: #4cc8d2; --redo-bg: #102f35;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap {
+  margin: 0 auto;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { display: flex; align-items: flex-start; gap: 20px; min-width: 0; }
+.brand .logo { margin-top: 4px; }
+.brand .logo { display: block; flex: none; background: #ffffff; border-radius: 4px; line-height: 0; }
+.brand .logo img { width: 96px; height: auto; display: block; }
+.course { margin: 0 0 4px; font-size: 14px; color: var(--muted); }
+.course a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.course a:hover, .course a:focus-visible { color: var(--accent-hover); text-decoration: underline; }
+@media (max-width: 560px) { .brand .logo img { width: 64px; } }
+footer.credit { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }
+footer.credit a { color: var(--accent); text-decoration: none; }
+footer.credit a:hover { text-decoration: underline; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.rules { margin: 6px 0 0; color: var(--muted); max-width: 100ch; }
+.rules b { color: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+
+.layout { display: flex; gap: 20px; align-items: flex-start; }
+.layout > #rail { flex: 0 0 310px; }
+.layout > .board { flex: 1 1 0; }
+.layout > #side { flex: 0 0 280px; }
+/* narrower screens: the right pane wraps below, its cards side by side; phones: one column */
+@media (max-width: 1250px) {
+  .layout { flex-wrap: wrap; }
+  .layout > .board { flex-basis: calc(100% - 330px); }
+  body:not(.sideoff) .layout > #side { flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; }
+  body:not(.sideoff) #side > .card { flex: 1 1 260px; }
+}
+@media (max-width: 900px) { .layout { flex-direction: column; flex-wrap: nowrap; align-items: stretch; } .layout > #rail, .layout > #side { flex: none; } }
+
+.controls { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* side panes: the ☰ button hides the left one and the right-hand button the right one, giving the drawing the width;
+   then hovering that screen edge (or tabbing into the pane) slides it in over the page until the pointer leaves */
+body.railoff #rail, body.sideoff #side {
+  position: fixed; top: 0; bottom: 0; width: 344px; z-index: 50; overflow-y: auto;
+  padding: 16px 16px 24px; background: var(--bg); box-shadow: 0 0 28px rgba(0, 0, 0, .22);
+  visibility: hidden; transition: transform .18s ease, visibility 0s linear .18s;
+}
+body.railoff #rail { left: 0; border-right: 1px solid var(--line); transform: translateX(-105%); }
+body.sideoff #side { right: 0; border-left: 1px solid var(--line); transform: translateX(105%); }
+body.railoff #rail.peek, body.sideoff #side.peek { transform: none; visibility: visible; transition: transform .18s ease; }
+.railedge { display: none; position: fixed; top: 0; bottom: 0; left: 0; width: 16px; z-index: 49; cursor: e-resize; }
+.railedge.right { left: auto; right: 0; cursor: w-resize; }
+.railedge::after { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 72px; margin-top: -36px; border-radius: 2px; background: var(--edge); opacity: .55; }
+.railedge.right::after { left: auto; right: 4px; }
+.railedge:hover::after { background: var(--accent); opacity: 1; }
+body.railoff #railEdge, body.sideoff #sideEdge { display: block; }
+.railhead { display: none; align-items: center; justify-content: space-between; gap: 8px; }
+.railhead span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.railhead button { padding: 5px 10px; font-size: 13px; }
+body.railoff #rail .railhead, body.sideoff #side .railhead { display: flex; }
+#railBtn[aria-pressed="true"], #sideBtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { body.railoff #rail, body.sideoff #side, body.railoff #rail.peek, body.sideoff #side.peek { transition: none; } }
+.card { position: relative; background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+/* (i) next to a card title: hovering shows the card's explanation over the card, a click keeps it open */
+.infobtn { width: 19px; height: 19px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  font: 700 12px/1 var(--font-body); text-transform: none; letter-spacing: 0; color: var(--muted); cursor: help; }
+.infobtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.tip { position: absolute; left: 10px; right: 10px; top: 40px; z-index: 20; margin: 0; padding: 10px 12px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .16);
+  font-size: 13.5px; line-height: 1.45; }
+label { font-weight: 500; font-size: 14px; }
+.lbl { font-weight: 500; font-size: 14px; margin: 0; }
+input:focus-visible, button:focus-visible, select:focus-visible, #log li:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btnrow > button { flex: 1 1 auto; }
+button { font: 500 14px var(--font-body); padding: 9px 12px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
+button.danger { color: var(--bad); border-color: var(--bad); font-weight: 600; }
+button.danger:hover:not(:disabled) { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+button:disabled { opacity: .4; cursor: default; }
+.btnrow.small button { font-size: 13px; padding: 7px 8px; }
+
+select { font: 14px var(--font-body); padding: 7px 8px; border-radius: 7px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > label { display: flex; justify-content: space-between; gap: 8px; }
+output { font-family: var(--font-mono); color: var(--muted); font-size: 13px; font-weight: 400; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin-top: 3px; flex: none; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 8px; font-weight: 600; background: var(--panel); color: var(--muted); }
+.seg button:nth-child(2n) { border-left: 1.5px solid var(--line); }
+.seg button:nth-child(n+3) { border-top: 1.5px solid var(--line); }
+.seg button[aria-pressed="true"], .seg button[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+
+.blockgrid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.blockgrid button { font: 600 16px var(--font-mono); padding: 6px 0; position: relative; }
+.blockgrid button.dirty::after { content: ""; position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.blockgrid button.need { border-color: var(--split); background: var(--split-bg); color: var(--split); }
+.txlist { display: flex; gap: 6px; flex-wrap: wrap; min-height: 34px; align-items: center; }
+.chip { font: 600 15px var(--font-mono); padding: 5px 12px; border-radius: 999px; }
+.chip[aria-pressed="true"], .chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+#saveNote { font: 14px/1.4 var(--font-body); padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; resize: vertical; }
+#saveNote::placeholder { color: var(--muted); opacity: .7; }
+.msg { margin: 0; font-size: 14px; min-height: 1.5em; color: var(--muted); }
+.msg.err { color: var(--bad); }
+.status { margin: 0; font-size: 13.5px; color: var(--muted); }
+.status.busy { color: var(--split); }
+.status b { font-family: var(--font-mono); }
+
+.stats dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; margin: 0; }
+.stats dl > div { display: flex; flex-direction: column; }
+.stats dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.stats dd { margin: 0; font: 600 22px var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.board { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.stepbar { background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px 16px; align-items: flex-start; flex-wrap: wrap; }
+.stepnav { display: flex; gap: 4px; align-items: center; }
+#railBtn { margin-right: 6px; }
+#railBtn svg, #sideBtn svg { width: 18px; height: 18px; }
+.stepbar { position: relative; padding-right: 54px; }
+#sideBtn { position: absolute; top: 12px; right: 14px; padding: 6px 8px; display: grid; place-items: center; }
+#sideBtn svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+.stepnav button { padding: 6px 8px; display: grid; place-items: center; }
+.stepnav svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+#playBtn { padding: 6px 12px; }
+#counter { font: 500 13px var(--font-mono); color: var(--muted); margin-left: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#caption { margin: 0; padding-top: 3px; font-size: 18px; flex: 1 1 380px; min-width: 0; line-height: 1.5; }
+
+.stage {
+  background-color: transparent;
+  background-image: radial-gradient(var(--dot) 1.1px, transparent 1.4px);
+  background-size: 22px 22px;
+  border: 1px solid var(--box); border-radius: 10px;
+  min-height: 380px; overflow: auto; display: flex; padding: 16px;
+}
+#svg { margin: auto; display: block; flex: none; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+.legend i.dash { border-style: dashed; border-color: var(--node-stroke); }
+.legend i.dotm { border: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--ink); }
+
+.dump { margin: 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.dump span.v { font-family: var(--font-mono); color: var(--ink); }
+
+.logbox { position: relative; max-height: 260px; overflow: auto; background: transparent; border: 1px solid var(--box); border-radius: 10px; }
+.loghead { margin: 0; padding: 10px 14px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+#log { list-style: none; margin: 0; padding: 4px 6px 8px; }
+#log li { display: grid; grid-template-columns: 2.2em 8.6em minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; align-items: baseline; font-size: 14px; }
+#log li:hover { background: var(--bg); }
+#log li.active { background: var(--visit-bg); }
+#log li.act { border-top: 1px solid var(--line); border-top-left-radius: 0; border-top-right-radius: 0; }
+#log .n { font: 12px var(--font-mono); color: var(--muted); text-align: right; }
+#log .tag { justify-self: start; }
+
+.tag { display: inline-block; font: 600 11px/1.6 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; vertical-align: 2px; border: 1px solid currentColor; white-space: nowrap; }
+#caption .tag { margin-right: 6px; }
+.t-visit { color: var(--visit); background: var(--visit-bg); }
+.t-ok { color: var(--ok); background: var(--ok-bg); }
+.t-bad { color: var(--bad); background: var(--bad-bg); }
+.t-split { color: var(--split); background: var(--split-bg); }
+.t-found { color: var(--found); background: var(--found-bg); }
+.t-undo { color: var(--undo); background: var(--undo-bg); }
+.t-redo { color: var(--redo); background: var(--redo-bg); }
+.t-info { color: var(--muted); background: var(--bg); }
+.kb { font: 700 .95em var(--font-mono); }
+.kt { font: 600 .95em var(--font-mono); }
+.kv { font: 600 .95em var(--font-mono); background: var(--found-bg); color: var(--found); padding: 0 5px; border-radius: 4px; white-space: nowrap; }
+.ke { font: 500 .9em var(--font-mono); white-space: nowrap; padding: 0 4px; border-radius: 4px; border: 1px solid var(--line); }
+.ke.k-undo { color: var(--undo); background: var(--undo-bg); border-color: transparent; }
+.ke.k-redo { color: var(--redo); background: var(--redo-bg); border-color: transparent; }
+.ke.k-commit { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.ke.k-abort { background: var(--muted); color: var(--bg); border-color: var(--muted); }
+.ke.k-ckstart, .ke.k-ckend, .ke.k-ckpt { color: var(--split); background: var(--split-bg); border-color: transparent; }
+
+.cmp { border: 1px solid var(--box); border-radius: 10px; padding: 12px 14px; overflow-x: auto; }
+.cmp h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.cmp table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.cmp th, .cmp td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--box); white-space: nowrap; }
+.cmp thead th { font-size: 12px; font-weight: 600; color: var(--muted); vertical-align: bottom; white-space: normal; }
+.cmp th:first-child, .cmp td:first-child { text-align: left; }
+.cmp tbody td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cmp tbody tr.cur th { color: var(--accent); }
+.cmp tbody tr.cur { background: var(--visit-bg); }
+.cmp td.bad { color: var(--bad); font-weight: 700; }
+.cmp td.good { color: var(--ok); font-weight: 700; }
+.cmp p { margin: 8px 0 0; }
+
+/* drawing */
+#svg text { font-family: var(--font-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#svg .rowlab { font: 700 17px var(--font-body); text-anchor: end; }
+#svg .rowsub { font: 400 12.5px var(--font-body); fill: var(--muted); text-anchor: end; }
+#svg .cell .frame { fill: var(--node); }
+#svg .cell .outline { fill: none; stroke: var(--node-stroke); stroke-width: 1.5; }
+#svg .cell .slot { fill: var(--slot-empty); stroke: var(--edge); stroke-width: 1.2; stroke-dasharray: 4 4; }
+#svg .cell.m { cursor: pointer; }
+#svg .cell.m:hover .outline, #svg .cell.m:hover .slot { stroke: var(--accent); stroke-width: 2.5; }
+#svg .cid { font: 700 13px var(--font-body); fill: var(--muted); text-anchor: start; }
+#svg .cv { font-size: 22px; font-weight: 600; }
+#svg .cw { font-size: 11.5px; font-weight: 500; fill: var(--muted); }
+#svg .cw.unc { font-style: italic; }
+#svg .cnone { font: italic 400 12px var(--font-body); fill: var(--muted); }
+#svg .dirty { fill: var(--ink); }
+#svg .lock { font-size: 11px; font-weight: 500; fill: var(--muted); }
+#svg .note { font: 700 12px var(--font-body); fill: var(--bad); }
+#svg .s-visit .frame, #svg .s-visit .slot { fill: var(--visit-bg); } #svg .s-visit .outline, #svg .s-visit .slot { stroke: var(--visit); stroke-width: 3; stroke-dasharray: none; }
+#svg .s-ok .frame, #svg .s-ok .slot { fill: var(--ok-bg); } #svg .s-ok .outline, #svg .s-ok .slot { stroke: var(--ok); stroke-width: 3; stroke-dasharray: none; }
+#svg .s-bad .frame, #svg .s-bad .slot { fill: var(--bad-bg); } #svg .s-bad .outline, #svg .s-bad .slot { stroke: var(--bad); stroke-width: 3; stroke-dasharray: none; }
+#svg .s-focus .frame, #svg .s-focus .slot { fill: var(--found-bg); } #svg .s-focus .outline, #svg .s-focus .slot { stroke: var(--found); stroke-width: 3; stroke-dasharray: none; }
+#svg .s-ckpt .frame, #svg .s-ckpt .slot { fill: var(--split-bg); } #svg .s-ckpt .outline, #svg .s-ckpt .slot { stroke: var(--split); stroke-width: 3; stroke-dasharray: none; }
+#svg .s-bad .cv { fill: var(--bad); }
+#svg .mv { stroke-width: 2.4; fill: none; }
+#svg .mv.down { stroke: var(--ok); }
+#svg .mv.up { stroke: var(--visit); }
+#svg .ah.down { fill: var(--ok); }
+#svg .ah.up { fill: var(--visit); }
+#svg .chip rect { fill: var(--found-bg); stroke: var(--found); stroke-width: 1.5; }
+#svg .chip text { font-size: 14px; font-weight: 700; fill: var(--found); }
+
+#svg .ent .eb { stroke-width: 1.5; }
+#svg .ent .eb2 { fill: none; stroke-width: 1; }
+#svg .ent .et { font-size: 13px; font-weight: 600; }
+#svg .ent .ev { font-size: 16px; font-weight: 700; }
+#svg .ent .ek { font-size: 10px; font-weight: 500; letter-spacing: .04em; }
+#svg .ent .ew { font: 700 10.5px var(--font-body); letter-spacing: .06em; }
+#svg .ent .elsn { font-size: 9.5px; fill: var(--muted); text-anchor: start; }
+#svg .k-start .eb { fill: var(--node); stroke: var(--node-stroke); }
+#svg .k-undo .eb { fill: var(--undo-bg); stroke: var(--undo); }
+#svg .k-undo text { fill: var(--undo); }
+#svg .k-redo .eb { fill: var(--redo-bg); stroke: var(--redo); }
+#svg .k-redo text { fill: var(--redo); }
+#svg .k-commit .eb { fill: var(--ink); stroke: var(--ink); }
+#svg .k-abort .eb { fill: var(--muted); stroke: var(--muted); }
+#svg .k-commit text, #svg .k-abort text, #svg .k-commit .elsn, #svg .k-abort .elsn { fill: var(--bg); }
+#svg .k-ckstart .eb, #svg .k-ckend .eb, #svg .k-ckpt .eb { fill: var(--split-bg); stroke: var(--split); }
+#svg .k-ckstart .eb2, #svg .k-ckend .eb2, #svg .k-ckpt .eb2 { stroke: var(--split); }
+#svg .k-ckstart text, #svg .k-ckend text, #svg .k-ckpt text { fill: var(--split); }
+#svg .ent.tail .eb { stroke-dasharray: 5 3; fill-opacity: .5; }
+#svg .ent.tail.k-commit text, #svg .ent.tail.k-abort text { fill: var(--ink); }
+#svg .ent .unread { opacity: .25; }
+#svg .ring { fill: none; stroke-width: 3; }
+#svg .s-visit .ring { stroke: var(--visit); }
+#svg .s-ok .ring { stroke: var(--ok); }
+#svg .s-bad .ring { stroke: var(--bad); }
+#svg .s-focus .ring { stroke: var(--found); }
+#svg .s-ckpt .ring { stroke: var(--split); }
+#svg .bufnote { font: 600 11.5px var(--font-body); fill: var(--muted); text-anchor: start; }
+#svg .emptylog { font: italic 400 15px var(--font-body); fill: var(--muted); text-anchor: start; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <a class="logo" href="https://distributedum.github.io/dba/" title="Database Administration course page"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaUAAAFICAMAAADH1hHAAAAA0mVYSWZJSSoACAAAAAoAAAEEAAEAAAClAQAAAQEEAAEAAABIAQAAAgEDAAMAAACGAAAAEgEDAAEAAAABAAAAGgEFAAEAAACMAAAAGwEFAAEAAACUAAAAKAEDAAEAAAACAAAAMQECAA8AAACcAAAAMgECABQAAACsAAAAaYcEAAEAAADAAAAAAAAAAAgACAAIAEgAAAABAAAASAAAAAEAAABHSU1QIDMuMC4wLVJDMgAAMjAyNTowMToxOCAyMDo1NDoyMAABAAGgAwABAAAAAQAAAAAAAACGG2U6AAABfmlDQ1BJQ0MgcHJvZmlsZQAAeJx9kTtIA0EURc9uFEWUgKYQsdhCrbTxh2AToxCECCEqJGrhfkwMZDdhN8EmpWAbsPDTGLWwsdbWwlYQBD8g9oKVoo2ElckGEsT4mjncefcx7w7I5YxuOi1BMK28HQuHlHhiRWl7RaKbABNMq7qTm4lGIzStr3skcd6NiFnN+/6sLmPD0UFSgKCes/MgrQOTW/mc4H0goG+qBkjnwLAdT6yA9Ch0zeM3wakqy2JmwF6KzYIcAJRUA2sNrG/aJsjjwIBhWgbIcY8NwUXBZqag194pNuzcsJYXhQ70E2aeBaIoaBRIkyHPCGksFBxihAk18fdV/VEKaGRIo6MwRxYTtepH/MHvbJ3k2Kg3qTMErS+u+zEIbbtQKbnu97HrVk7A9wxXVt2fLcPUJ/hKdW3gCPzbcHFd17Q9uNyB3qecaqtVyQfIySS8n0FXAnpuoWPVy612z+kDLBUhcgMHhzCUAv9ak73bG3P7t6eW3w8ZKnLpf5uDuAAADXppVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+Cjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDQuNC4wLUV4aXYyIj4KIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIgogICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgIHhtbG5zOkdJTVA9Imh0dHA6Ly93d3cuZ2ltcC5vcmcveG1wLyIKICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIgogICB4bXBNTTpEb2N1bWVudElEPSJnaW1wOmRvY2lkOmdpbXA6OTNiMzc4ZTgtN2EzYS00YzFmLWI0ZDEtZWVjYjI1NDk2M2JiIgogICB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjdjM2JmNjgyLTEyOWItNDIxZS04NTg3LThmYjRkOTczMTc2OSIKICAgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ4bXAuZGlkOjk2MjYzYjQyLTU3N2EtNDg4MC1iNGE2LWE0ZTljNjdlNTY2NiIKICAgZGM6Rm9ybWF0PSJpbWFnZS9wbmciCiAgIEdJTVA6QVBJPSIzLjAiCiAgIEdJTVA6UGxhdGZvcm09IkxpbnV4IgogICBHSU1QOlRpbWVTdGFtcD0iMTczNzIzMzY2MjQxMjM1MyIKICAgR0lNUDpWZXJzaW9uPSIzLjAuMC1SQzIiCiAgIHRpZmY6T3JpZW50YXRpb249IjEiCiAgIHhtcDpDcmVhdG9yVG9vbD0iR0lNUCIKICAgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNTowMToxOFQyMDo1NDoyMCswMDowMCIKICAgeG1wOk1vZGlmeURhdGU9IjIwMjU6MDE6MThUMjA6NTQ6MjArMDA6MDAiPgogICA8eG1wTU06SGlzdG9yeT4KICAgIDxyZGY6U2VxPgogICAgIDxyZGY6bGkKICAgICAgc3RFdnQ6YWN0aW9uPSJzYXZlZCIKICAgICAgc3RFdnQ6Y2hhbmdlZD0iLyIKICAgICAgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDoxODM0ODVhMy05ZjdmLTQ0MWQtYjc5ZC1hNjA2NzRjYzQxZjciCiAgICAgIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkdJTVAgMy4wLjAtUkMyIChMaW51eCkiCiAgICAgIHN0RXZ0OndoZW49IjIwMjUtMDEtMThUMjA6NTQ6MjIrMDA6MDAiLz4KICAgIDwvcmRmOlNlcT4KICAgPC94bXBNTTpIaXN0b3J5PgogIDwvcmRmOkRlc2NyaXB0aW9uPgogPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgIAo8P3hwYWNrZXQgZW5kPSJ3Ij8+RU8QCAAAAwBQTFRFAAAAAQEBAgICAwMDBAQEBQUFBgYGBwcHCAgICQkJCgoKCwsLDAwMDQ0NDg4ODw8PEBAQEREREhISExMTFBQUFRUVFhYWFxcXGBgYGRkZGhoaGxsbHBwcHR0dHh4eHx8fICAgISEhIiIiIyMjJCQkJSUlJiYmJycnKCgoKSkpKioqKysrLCwsLS0tLi4uLy8vMDAwMTExMjIyMzMzNDQ0NTU1NjY2Nzc3ODg4OTk5Ojo6Ozs7PDw8PT09Pj4+Pz8/QEBAQUFBQkJCQ0NDRERERUVFRkZGR0dHSEhISUlJSkpKS0tLTExMTU1NTk5OT09PUFBQUVFRUlJSU1NTVFRUVVVVVlZWV1dXWFhYWVlZWlpaW1tbXFxcXV1dXl5eX19fYGBgYWFhYmJiY2NjZGRkZWVlZmZmZ2dnaGhoaWlpampqa2trbGxsbW1tbm5ub29vcHBwcXFxcnJyc3NzdHR0dXV1dnZ2d3d3eHh4eXl5enp6e3t7fHx8fX19fn5+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" alt="Universidade do Minho"></a>
+      <div>
+        <p class="course"><a href="https://distributedum.github.io/dba/">Database Administration</a> · Master in Informatics Engineering</p>
+        <h1>Crash Recovery Workbench</h1>
+        <p class="rules" id="rules"></p>
+      </div>
+    </div>
+    <button id="themeBtn" type="button">Dark mode</button>
+  </header>
+
+  <main class="layout">
+    <aside class="controls" id="rail" aria-label="Settings">
+      <div class="railhead"><span>Settings</span><button id="pinBtn" type="button" title="Keep the settings open (M)">Keep open</button></div>
+
+      <section class="card">
+        <h2>Transactions<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipTx" aria-label="About transactions">i</button></h2>
+        <p class="tip" id="tipTx" role="tooltip" hidden>A write takes the block's write lock, held until the transaction commits or aborts (strict two-phase locking). “Commit, but crash halfway through” stops a commit in the middle of its steps.</p>
+        <div class="btnrow"><button id="startBtn" class="primary" type="button">Start transaction</button></div>
+        <div class="txlist" id="txList" role="group" aria-label="Active transactions"></div>
+        <p class="lbl" id="writeLabel">Write a block</p>
+        <div class="blockgrid" id="writeGrid"></div>
+        <div class="btnrow">
+          <button id="commitBtn" type="button">Commit</button>
+          <button id="abortBtn" type="button">Abort</button>
+        </div>
+        <div class="btnrow small"><button id="commitCrashBtn" type="button">Commit, but crash halfway through</button></div>
+      </section>
+
+      <section class="card">
+        <h2>Buffer manager<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipBuf" aria-label="About the buffer manager">i</button></h2>
+        <p class="tip" id="tipBuf" role="tooltip" hidden>In the drawing, click a Memory block to write it with the selected transaction; Shift+click evicts it.</p>
+        <p class="lbl">Evict a block (written to disk first if dirty)</p>
+        <div class="blockgrid" id="evictGrid"></div>
+        <div class="btnrow small"><button id="forceBtn" type="button">Force the log to disk</button></div>
+      </section>
+
+      <section class="card">
+        <h2>Checkpoint<button type="button" class="infobtn" aria-expanded="false" aria-controls="ckptTip" aria-label="About checkpoints">i</button></h2>
+        <p class="tip" id="ckptTip" role="tooltip" hidden></p>
+        <div class="btnrow">
+          <button id="ckptBtn" type="button">Checkpoint</button>
+          <button id="fuzzyBtn" type="button">Fuzzy checkpoint</button>
+        </div>
+        <p class="status" id="ckptStatus" hidden></p>
+        <button id="ckFlushBtn" type="button" hidden>Evict the blocks it waits for</button>
+      </section>
+
+      <section class="card">
+        <h2>Failure<button type="button" class="infobtn" aria-expanded="false" aria-controls="failTip" aria-label="About failures">i</button></h2>
+        <p class="tip" id="failTip" role="tooltip" hidden></p>
+        <div class="btnrow">
+          <button id="crashBtn" class="danger" type="button">Crash</button>
+          <button id="recoverBtn" class="primary" type="button">Run recovery</button>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Scenario<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipScen" aria-label="About scenarios">i</button></h2>
+        <p class="tip" id="tipScen" role="tooltip" hidden>Sample loads a ready-made run; Empty starts over with every block at its initial version. Undo (Ctrl+Z) takes back the last action.</p>
+        <div class="btnrow small">
+          <button id="sampleBtn" type="button" title="Load the sample run">Sample</button>
+          <button id="clearBtn" type="button" title="Start from an empty database">Empty</button>
+        </div>
+        <div class="btnrow small"><button id="undoBtn" type="button" title="Undo the last action (Ctrl+Z)">Undo the last action</button></div>
+      </section>
+      <section class="card">
+        <h2>Recovery method<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipMode" aria-label="About recovery methods">i</button></h2>
+        <p class="tip" id="tipMode" role="tooltip" hidden>Switching method replays the same actions under the new rules. Actions the new method does not allow are refused and listed.</p>
+        <div class="seg" role="group" aria-label="Recovery method">
+          <button id="mode-naive" type="button" aria-pressed="true">Naive (no log)</button>
+          <button id="mode-redo" type="button" aria-pressed="false">Redo</button>
+          <button id="mode-undo" type="button" aria-pressed="false">Undo</button>
+          <button id="mode-ur" type="button" aria-pressed="false">Undo/redo</button>
+        </div>
+        <label class="check" id="forceRow"><input type="checkbox" id="forceChk" checked> At commit, write the transaction's blocks to disk (force)</label>
+      </section>
+
+
+    </aside>
+    <div class="railedge" id="railEdge" title="Settings (M)" aria-hidden="true"></div>
+
+    <section class="board">
+      <div class="stepbar">
+        <div class="stepnav">
+          <button id="railBtn" type="button" aria-controls="rail" aria-pressed="false" aria-label="Hide settings" title="Hide the settings to give the drawing more room (M). Then hover the left edge to see them."><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 4h18v16H3zM10 6v12h9V6z"/></svg></button>
+          <button id="firstBtn" type="button" aria-label="First step" title="First step"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button id="prevBtn" type="button" aria-label="Previous step" title="Previous step (←)"><svg viewBox="0 0 24 24"><path d="M16 5v14L5 12z"/></svg></button>
+          <button id="playBtn" type="button" aria-label="Play" title="Play / pause (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+          <button id="nextBtn" type="button" aria-label="Next step" title="Next step (→)"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <button id="lastBtn" type="button" aria-label="Last step" title="Last step"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          <span id="counter"></span>
+        </div>
+        <p id="caption" aria-live="polite"></p>
+        <button id="sideBtn" type="button" aria-controls="side" aria-pressed="false" aria-label="Hide the status and display pane" title="Hide the status and display pane on the right (R). Then hover the right edge to see it."><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 4h18v16H3zM5 6v12h9V6z"/></svg></button>
+      </div>
+
+      <div class="stage" id="stage"><svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Memory, disk and log"></svg></div>
+
+      <div class="legend">
+        <span><i style="background:var(--visit-bg);border-color:var(--visit)"></i>Read / scanned</span>
+        <span><i style="background:var(--ok-bg);border-color:var(--ok)"></i>Written to disk / repaired</span>
+        <span><i style="background:var(--bad-bg);border-color:var(--bad)"></i>Wrong after a crash / not allowed</span>
+        <span><i style="background:var(--split-bg);border-color:var(--split)"></i>Checkpoint</span>
+        <span><i style="background:var(--found-bg);border-color:var(--found)"></i>In focus</span>
+        <span><i style="background:var(--undo-bg);border-color:var(--undo)"></i>Undo entry (old value)</span>
+        <span><i style="background:var(--redo-bg);border-color:var(--redo)"></i>Redo entry (new value)</span>
+        <span><i style="background:var(--ink);border-color:var(--ink)"></i>COMMIT</span>
+        <span><i style="background:var(--muted);border-color:var(--muted)"></i>ABORT</span>
+        <span><i class="dash"></i>Log buffer, not yet on disk</span>
+        <span><i class="dotm"></i>Dirty: memory differs from disk</span>
+        <span>✓ committed · … active · ✗ aborted or died</span>
+      </div>
+
+      <p class="dump">Committed state (what the disk must hold after recovery): <span class="v" id="truthDump"></span></p>
+      <p class="dump">Transactions: <span class="v" id="txDump"></span></p>
+      <p class="dump">Log in textbook notation: <span class="v" id="logDump"></span></p>
+
+      <div class="logbox" id="logBox">
+        <p class="loghead">Steps of the whole run · a new action continues from the step on screen</p>
+        <ol id="log"></ol>
+      </div>
+
+      <div class="cmp">
+        <h3 id="cmpTitle">Same actions under each method</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Actions not allowed</th><th>Block writes</th><th>Log forces</th><th>Log entries</th><th>Wrong blocks after crash</th><th>Log entries read by recovery</th><th>Undone / redone</th><th>Wrong after recovery</th></tr></thead>
+          <tbody id="cmpBody"></tbody>
+        </table>
+        <p class="hint">Replays every recorded action under each method. Block writes and log forces count normal processing only, before the crash.</p>
+      </div>
+    </section>
+
+    <aside class="controls" id="side" aria-label="Status and display">
+      <div class="railhead"><span>Status and display</span><button id="pinSide" type="button" title="Keep this pane open (R)">Keep open</button></div>
+      <section class="card stats">
+        <h2>Current state</h2>
+        <dl>
+          <div><dt>Active txns</dt><dd id="stActive">0</dd></div>
+          <div><dt>Dirty blocks</dt><dd id="stDirty">0</dd></div>
+          <div><dt>Disk writes</dt><dd id="stWrites">0</dd></div>
+          <div><dt>Log on disk</dt><dd id="stStable">0</dd></div>
+          <div><dt>Log buffer</dt><dd id="stTail">0</dd></div>
+          <div><dt>Log forces</dt><dd id="stForces">0</dd></div>
+        </dl>
+        <p class="hint" id="stRec" hidden></p>
+      </section>
+      <section class="card">
+        <h2>Save and share</h2>
+        <label for="saveNote">Note or question, saved in the file</label>
+        <textarea id="saveNote" rows="2" placeholder="e.g. Why is A still wrong after the redo pass?"></textarea>
+        <div class="btnrow">
+          <button id="saveBtn" type="button">Save to file</button>
+          <button id="openBtn" type="button">Open file…</button>
+        </div>
+        <input type="file" id="openFile" accept=".json,application/json" hidden>
+        <p class="hint">The file holds every action of the run and the step on screen, so whoever opens it can step back and forth through the whole run from there. You can also drop a file onto the page.</p>
+        <p id="fileMsg" class="msg" role="status"></p>
+      </section>
+      <section class="card">
+        <h2>Display</h2>
+        <div class="field">
+          <label>Each step shows</label>
+          <div class="seg" role="group" aria-label="Step granularity">
+            <button id="byAction" type="button" aria-pressed="false">One action</button>
+            <button id="byDetail" type="button" aria-pressed="true">Every detail</button>
+          </div>
+          <p class="hint">One action per click; a recovery still goes one log entry at a time.</p>
+        </div>
+        <div class="field">
+          <label for="nbSel">Number of blocks</label>
+          <select id="nbSel"></select>
+        </div>
+        <label class="check"><input type="checkbox" id="animChk" checked> Play each operation step by step</label>
+        <div class="field">
+          <label for="speed">Time per step <output id="speedOut">1.1 s</output></label>
+          <input type="range" id="speed" min="300" max="3000" step="100" value="1100">
+        </div>
+        <div class="field">
+          <label for="zoom">Zoom <output id="zoomOut">100%</output></label>
+          <input type="range" id="zoom" min="50" max="200" step="10" value="100">
+        </div>
+      </section>
+    </aside>
+    <div class="railedge right" id="sideEdge" title="Status and display (R)" aria-hidden="true"></div>
+  </main>
+
+  <footer class="credit">
+    <span><a href="https://distributedum.github.io/dba/">Database Administration</a> · Universidade do Minho</span>
+    <span>Built with Claude, Anthropic's AI assistant.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const CW = 76, CH = 76, CP = 88, ARZ = 58, EW = 62, EH = 62, EGAP = 9, PGAP = 3, ROWP = 86, LABW = 150, PAD = 26;
+  const $ = id => document.getElementById(id);
+  const S = { cur: null, by: 'detail', animate: true, speed: 1100, zoom: 1 };
+  const SAMPLE = [
+    { op: 'start', t: 'T1' }, { op: 'write', t: 'T1', b: 'A' }, { op: 'write', t: 'T1', b: 'C' }, { op: 'commit', t: 'T1' },
+    { op: 'start', t: 'T2' }, { op: 'write', t: 'T2', b: 'B' }, { op: 'write', t: 'T2', b: 'E' },
+    { op: 'start', t: 'T3' }, { op: 'write', t: 'T3', b: 'A' }, { op: 'evict', b: 'B' },
+    { op: 'write', t: 'T3', b: 'F' }, { op: 'commit', t: 'T3' }, { op: 'write', t: 'T2', b: 'G' }
+  ];
+
+  let D, script = [], history = [], view = [];
+  let steps = [], cur = 0, playing = false, timer = 0, rafId = 0, shownStep = null, recording = true;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ---------- recovery core ----------
+  // D holds the whole simulated system: blocks on disk and in the buffer pool (each a version { v, w } where w is
+  // the writing transaction), the log (entries 0 .. flushed-1 are on disk, the rest sit in the log buffer),
+  // transactions with their writes, write locks (strict 2PL) and an in-progress checkpoint.
+  const MODES = ['naive', 'redo', 'undo', 'ur'];
+  const MODE_NAME = { naive: 'no log (naive)', redo: 'redo logging', undo: 'undo logging', ur: 'undo/redo logging' };
+  const LETTERS = 'ABCDEFGHIJKL';
+  const clone = x => JSON.parse(JSON.stringify(x));
+  const logged = () => D.mode !== 'naive';
+  const pl = (n, w, ws) => `${n} ${n === 1 ? w : (ws || w + 's')}`;
+  const list = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+  const Bk = b => `<span class="kb">${b}</span>`;
+  // a version is named after its block: a0, a1, … for A, b0, b1, … for B
+  const vn = (b, v) => b.toLowerCase() + v;
+  const Vv = (b, x) => `<span class="kv">${vn(b, x.v)}</span>`;
+  const Tx = t => `<span class="kt">${t}</span>`;
+  function entText(e) {
+    switch (e.type) {
+      case 'start': return `⟨START ${e.t}⟩`;
+      case 'commit': return `⟨COMMIT ${e.t}⟩`;
+      case 'abort': return `⟨ABORT ${e.t}⟩`;
+      case 'undo': case 'redo': return `⟨${e.t}, ${e.b}, ${vn(e.b, e.val.v)}⟩`;
+      case 'ckstart': return `⟨START CKPT (${e.list.join(', ')})⟩`;
+      case 'ckend': return '⟨END CKPT⟩';
+      default: return '⟨CKPT⟩';
+    }
+  }
+  const En = e => `<span class="ke k-${e.type}">${entText(e)}</span>`;
+
+  function newState(mode, nb, force) {
+    const names = LETTERS.slice(0, nb).split('');
+    const disk = {}, mem = {}, maxV = {};
+    for (const b of names) { disk[b] = { v: 0, w: null }; mem[b] = null; maxV[b] = 0; }
+    return {
+      mode, force, names, disk, mem, maxV, log: [], flushed: 0, txns: {}, order: [], nextTx: 1, seq: 0,
+      locks: {}, ckpt: null, crashed: false, epoch: 0, base: clone(disk), rs: null,
+      stats: { diskWrites: 0, logForces: 0, refused: 0 }, lastCrash: null, lastRec: null
+    };
+  }
+  const statusOf = (s, t) => s.txns[t] ? s.txns[t].status : 'none';
+  const activeTx = () => D.order.filter(t => D.txns[t].status === 'active');
+  const isDirty = b => !!D.mem[b] && D.mem[b].v !== D.disk[b].v;
+  const dirtyBlocks = () => D.names.filter(isDirty);
+  const startIdx = t => D.log.findIndex(e => e.type === 'start' && e.t === t);
+
+  // The committed state: per block, the last write of a committed transaction since the last restart.
+  function truthOf(s) {
+    const t = clone(s.base), best = {};
+    for (const id of s.order) {
+      const x = s.txns[id];
+      if (x.epoch !== s.epoch || x.status !== 'committed') continue;
+      for (const w of x.writes) if (!(w.b in best) || w.seq > best[w.b]) { best[w.b] = w.seq; t[w.b] = { ...w.nw }; }
+    }
+    return t;
+  }
+
+  function snapOf() {
+    return {
+      names: D.names.slice(), mode: D.mode, disk: clone(D.disk), mem: clone(D.mem), log: clone(D.log), flushed: D.flushed,
+      status: Object.fromEntries(D.order.map(t => [t, D.txns[t].status])), locks: { ...D.locks },
+      txs: D.order.filter(t => D.txns[t].epoch === D.epoch).map(t => ({ t, status: D.txns[t].status, blocks: [...new Set(D.txns[t].writes.map(w => w.b))] })),
+      need: D.ckpt ? D.ckpt.need.slice() : [], truth: truthOf(D), stats: { ...D.stats }, lastRec: D.lastRec && { ...D.lastRec }
+    };
+  }
+  function rec(kind, msg, hl = {}, extra = {}) {
+    if (!recording) return;
+    const st = { kind, msg, hl, snap: snapOf(), ...extra };
+    if (D.rs) { st.check = true; st.marks = { ...D.rs.marks }; st.snap.truth = D.rs.truth; }
+    steps.push(st);
+  }
+  function refuse(msg, hl = {}) { D.stats.refused++; rec('refuse', msg, hl); return false; }
+  const downMsg = () => 'The system has crashed. Run recovery before doing anything else.';
+  function txCheck(t) {
+    if (D.crashed) return downMsg();
+    if (!D.txns[t]) return `There is no transaction ${t}. Start one first.`;
+    const st = D.txns[t].status;
+    if (st !== 'active') return `${Tx(t)} is not active: it ${st === 'committed' ? 'has committed' : st === 'aborted' ? 'has aborted' : 'died in a crash'}.`;
+    return '';
+  }
+
+  function appendLog(e) { e.lsn = D.log.length; D.log.push(e); return e; }
+  function forceLog(why) {
+    if (D.flushed >= D.log.length) return false;
+    const from = D.flushed, n = D.log.length - from, hl = {};
+    D.flushed = D.log.length;
+    D.stats.logForces++;
+    for (let i = from; i < D.log.length; i++) hl['l:' + i] = 'ok';
+    rec('force', `${why ? why + ' ' : ''}Force the log: ${pl(n, 'entry', 'entries')} ${n === 1 ? 'moves' : 'move'} from the log buffer to disk.`, hl);
+    return true;
+  }
+  function pruneNeed() { if (D.ckpt) D.ckpt.need = D.ckpt.need.filter(isDirty); }
+  function fetchBlock(b) {
+    D.mem[b] = { ...D.disk[b] };
+    rec('read', `${Bk(b)} is not in memory, so read it from disk: ${Vv(b, D.mem[b])}.`, { ['m:' + b]: 'visit', ['d:' + b]: 'visit' }, { moves: [{ b, dir: 'up' }] });
+  }
+  function writeOut(b, why) {
+    if (D.mode === 'undo' || D.mode === 'ur') {
+      let pending = false;
+      for (let i = D.flushed; i < D.log.length; i++) if (D.log[i].b === b) pending = true;
+      if (pending) forceLog(`Write-ahead rule: the log entries for ${Bk(b)} must be on disk before ${Bk(b)} itself.`);
+    }
+    D.disk[b] = { ...D.mem[b] };
+    D.stats.diskWrites++;
+    pruneNeed();
+    rec('diskw', `${why}Write ${Bk(b)} ${Vv(b, D.disk[b])} from memory to disk.`, { ['m:' + b]: 'ok', ['d:' + b]: 'ok' }, { moves: [{ b, dir: 'down' }] });
+  }
+  function releaseLocks(t) { for (const b of Object.keys(D.locks)) if (D.locks[b] === t) delete D.locks[b]; }
+
+  function opStart(t) {
+    D.nextTx = Math.max(D.nextTx, +t.slice(1) + 1);
+    if (D.crashed) return refuse(downMsg());
+    if (D.txns[t]) return refuse(`${Tx(t)} already exists.`);
+    if (D.ckpt && D.ckpt.kind === 'quiet') {
+      const act = activeTx();
+      return refuse(`A quiescent checkpoint is in progress, so ${Tx(t)} may not start until it ends. ` +
+        (D.ckpt.phase === 'drain' ? `It is waiting for ${list(act.map(Tx))} to commit or abort.` : `It is waiting for ${list(D.ckpt.need.map(Bk))} to be written to disk.`));
+    }
+    D.txns[t] = { id: t, status: 'active', writes: [], epoch: D.epoch };
+    D.order.push(t);
+    if (!logged()) { rec('start', `Start transaction ${Tx(t)}. With no log, nothing is recorded anywhere.`); return true; }
+    const e = appendLog({ type: 'start', t });
+    rec('start', `Start transaction ${Tx(t)}: append ${En(e)} to the log buffer in memory.`, { ['l:' + e.lsn]: 'focus' });
+    return true;
+  }
+
+  function opWrite(t, b) {
+    const chk = txCheck(t);
+    if (chk) return refuse(chk);
+    if (!D.names.includes(b)) return refuse(`There is no block ${b}.`);
+    if (D.locks[b] && D.locks[b] !== t)
+      return refuse(`${Tx(t)} cannot write ${Bk(b)}: ${Tx(D.locks[b])} holds its write lock until it commits or aborts (strict two-phase locking).`, { ['m:' + b]: 'bad' });
+    if (!D.mem[b]) fetchBlock(b);
+    const x = D.txns[t], old = { ...D.mem[b] }, nw = { v: ++D.maxV[b], w: t };
+    D.mem[b] = nw;
+    D.locks[b] = t;
+    const w = { b, old, nw, seq: ++D.seq };
+    x.writes.push(w);
+    const hl = { ['m:' + b]: 'focus' };
+    let msg = `${Tx(t)} writes ${Bk(b)} in memory: ${Vv(b, old)} → ${Vv(b, nw)}.`;
+    if (D.mode === 'naive') msg += ' Nothing is logged.';
+    else if (D.mode === 'undo') {
+      const e = appendLog({ type: 'undo', t, b, val: { ...old } }); w.ul = e.lsn; hl['l:' + e.lsn] = 'focus';
+      msg += ` Append the undo entry ${En(e)}, which keeps the old value.`;
+    } else if (D.mode === 'redo') {
+      const e = appendLog({ type: 'redo', t, b, val: { ...nw } }); hl['l:' + e.lsn] = 'focus';
+      msg += ` Append the redo entry ${En(e)}, which keeps the new value.`;
+    } else {
+      const u = appendLog({ type: 'undo', t, b, val: { ...old } }), r = appendLog({ type: 'redo', t, b, val: { ...nw } });
+      w.ul = u.lsn; hl['l:' + u.lsn] = 'focus'; hl['l:' + r.lsn] = 'focus';
+      msg += ` Append the undo entry ${En(u)} (old value) and the redo entry ${En(r)} (new value).`;
+    }
+    msg += ` The disk still holds ${Vv(b, D.disk[b])}.`;
+    rec('write', msg, hl);
+    return true;
+  }
+
+  function finishCommit(t) {
+    D.txns[t].status = 'committed';
+    releaseLocks(t);
+    const left = D.names.filter(b => isDirty(b) && D.mem[b].w === t), L = list(left.map(Bk));
+    let msg = `${Tx(t)} has committed and releases its locks.`;
+    if (D.mode === 'naive') msg += left.length ? ` Its new values for ${L} are only in memory and nothing on disk records them: a crash now would lose them.` : ' Its blocks are on disk.';
+    else if (D.mode === 'undo') msg += ' Its blocks reached disk before the COMMIT entry, so it will never need redo.';
+    else if (left.length) msg += ` ${left.length === 1 ? 'Block' : 'Blocks'} ${L} stay${left.length === 1 ? 's' : ''} in memory (no force): after a crash, the redo entries on disk can recreate ${left.length === 1 ? 'it' : 'them'}.`;
+    rec('commit', msg, Object.fromEntries(left.map(b => ['m:' + b, 'focus'])));
+  }
+
+  function opCommit(t, mid) {
+    const chk = txCheck(t);
+    if (chk) return refuse(chk);
+    const dirty = D.names.filter(b => isDirty(b) && D.mem[b].w === t);
+    const plan = [], add = (label, fn) => plan.push([label, fn]);
+    if (D.mode === 'naive' && D.force)
+      dirty.forEach(b => add(`write ${b} to disk`, () => writeOut(b, `Commit ${Tx(t)} with the force policy: `)));
+    if (D.mode === 'undo')
+      dirty.forEach(b => add(`write ${b} to disk`, () => writeOut(b, `Rule U2: every block ${Tx(t)} changed must be on disk before its COMMIT entry. `)));
+    if (logged()) {
+      let ce;
+      add(`append ⟨COMMIT ${t}⟩`, () => {
+        ce = appendLog({ type: 'commit', t });
+        rec('log', `Commit ${Tx(t)}: append ${En(ce)} to the log buffer.`, { ['l:' + ce.lsn]: 'focus' });
+      });
+      add('force the log', () => forceLog(`The commit point: ${Tx(t)} has committed once ${En(ce)} is on disk.`));
+    }
+    add('finish', () => finishCommit(t));
+    if (!mid) { plan.forEach(p => p[1]()); return true; }
+    const k = Math.floor(plan.length / 2);
+    for (let i = 0; i < k; i++) plan[i][1]();
+    const done = plan.slice(0, k).map(p => `“${p[0]}”`), next = plan[k][0];
+    opCrash(`The crash hits while ${Tx(t)} is committing: ${done.length ? `it had done ${list(done)}` : 'it had done nothing yet'}` +
+      (next === 'finish' ? ', but had not yet reported the commit. ' : `, but not “${next}”. `));
+    return true;
+  }
+
+  function opAbort(t) {
+    const chk = txCheck(t);
+    if (chk) return refuse(chk);
+    const x = D.txns[t];
+    for (let i = x.writes.length - 1; i >= 0; i--) {
+      const w = x.writes[i];
+      if (!D.mem[w.b]) fetchBlock(w.b);
+      const was = D.mem[w.b];
+      D.mem[w.b] = { ...w.old };
+      const src = (D.mode === 'undo' || D.mode === 'ur') ? `using the undo entry ${En(D.log[w.ul])}`
+        : D.mode === 'redo' ? 'using a before-image kept in memory (a redo log holds no old values)' : 'using a before-image kept in memory';
+      rec('restore', `Abort ${Tx(t)}: put ${Bk(w.b)} back from ${Vv(w.b, was)} to ${Vv(w.b, w.old)}, ${src}.`, { ['m:' + w.b]: 'focus' });
+    }
+    const stolen = [...new Set(x.writes.map(w => w.b))].filter(b => D.disk[b].w === t);
+    stolen.forEach(b => writeOut(b, `The disk copy of ${Bk(b)} still holds a value from ${Tx(t)}, so write the restored value back. `));
+    x.status = 'aborted';
+    releaseLocks(t);
+    if (logged()) {
+      const e = appendLog({ type: 'abort', t });
+      rec('abort', `${Tx(t)} has aborted and releases its locks. Append ${En(e)} to the log buffer.`, { ['l:' + e.lsn]: 'focus' });
+    } else rec('abort', `${Tx(t)} has aborted and releases its locks.`);
+    return true;
+  }
+
+  function opEvict(b) {
+    if (D.crashed) return refuse(downMsg());
+    if (!D.names.includes(b)) return refuse(`There is no block ${b}.`);
+    const m = D.mem[b];
+    if (!m) return refuse(`${Bk(b)} is not in memory, so there is nothing to evict.`, { ['d:' + b]: 'bad' });
+    const dirty = isDirty(b), wst = m.w ? statusOf(D, m.w) : 'none';
+    if (dirty && D.mode === 'redo' && wst === 'active')
+      return refuse(`${Bk(b)} cannot be evicted: it holds ${Vv(b, m)}, written by ${Tx(m.w)}, which has not committed. Redo logging never lets uncommitted data reach disk (no steal), because the log has no old value to undo it with.`, { ['m:' + b]: 'bad' });
+    if (dirty) {
+      const why = wst !== 'active' ? 'Evict: '
+        : D.mode === 'naive' ? `Steal: ${Tx(m.w)} has not committed, and with no log nothing could undo this write after a crash. `
+        : `Steal: ${Tx(m.w)} has not committed, but its undo entry lets recovery restore the old value. `;
+      writeOut(b, why);
+    }
+    const kept = D.mem[b];
+    D.mem[b] = null;
+    pruneNeed();
+    rec('evict', dirty ? `${Bk(b)} leaves memory.` : `${Bk(b)} is clean (memory and disk both hold ${Vv(b, kept)}), so it leaves memory without a disk write.`, { ['d:' + b]: dirty ? 'ok' : 'visit' });
+    return true;
+  }
+
+  function opForce() {
+    if (D.crashed) return refuse(downMsg());
+    if (!logged()) return refuse('There is no log in naive mode.');
+    if (D.flushed === D.log.length) { rec('info', 'The log buffer is empty: every log entry is already on disk.'); return true; }
+    forceLog('On request.');
+    return true;
+  }
+
+  function opCkpt(fuzzy) {
+    if (D.crashed) return refuse(downMsg());
+    if (!logged()) return refuse('There is no log in naive mode, so there is nothing to checkpoint. Pick a logging method first.');
+    if (D.ckpt) return refuse(`A ${D.ckpt.kind === 'quiet' ? 'quiescent' : 'fuzzy'} checkpoint is already in progress. Let it finish first.`);
+    const act = activeTx(), AL = list(act.map(Tx));
+    if (!fuzzy) {
+      D.ckpt = { kind: 'quiet', phase: 'drain', list: act, need: [] };
+      rec('ckpt', act.length
+        ? `Quiescent checkpoint: stop accepting new transactions and wait until ${AL} ${act.length === 1 ? 'commits or aborts' : 'have all committed or aborted'}.`
+        : 'Quiescent checkpoint: no transaction is active, so there is nothing to wait for.');
+      return true;
+    }
+    if (D.mode === 'redo')
+      return refuse('Fuzzy checkpoints are not offered with redo logging. Without steal, a block whose committed value must reach disk cannot be written while an active transaction has overwritten it, so ⟨END CKPT⟩ could be delayed for as long as transactions keep updating it. Use a quiescent checkpoint.');
+    const need = D.mode === 'ur' ? dirtyBlocks() : [];
+    D.ckpt = { kind: 'fuzzy', phase: 'wait', list: act, need };
+    const e = appendLog({ type: 'ckstart', list: act.slice() }), NL = list(need.map(Bk));
+    let why;
+    if (D.mode === 'undo') why = act.length ? `It ends once ${AL} ${act.length === 1 ? 'has' : 'have all'} committed or aborted. New transactions may start meanwhile.` : 'No transaction is active, so it can end at once.';
+    else why = need.length ? `It ends once every block that is dirty now is on disk: ${NL}. Evict them. New transactions may start meanwhile.` : 'No block is dirty, so it can end at once.';
+    rec('ckpt', `Fuzzy checkpoint: append ${En(e)}, which lists the active transactions. ${why}`, { ['l:' + e.lsn]: 'ckpt' });
+    forceLog('');
+    return true;
+  }
+
+  function ckptAdvance() {
+    const c = D.ckpt;
+    if (!c || D.crashed) return;
+    pruneNeed();
+    if (c.kind === 'quiet') {
+      if (c.phase === 'drain') {
+        if (activeTx().length) return;
+        c.phase = 'flush';
+        c.need = D.mode === 'undo' ? [] : dirtyBlocks();
+        if (c.need.length) {
+          rec('ckpt', `No transaction is active any more. Before ⟨CKPT⟩ can be written, the dirty blocks must reach disk: ${list(c.need.map(Bk))}. Evict them.`);
+          return;
+        }
+      }
+      if (c.need.length) return;
+      const e = appendLog({ type: 'ckpt' });
+      D.ckpt = null;
+      rec('ckpt', `Append ${En(e)}: no transaction is active${D.mode === 'undo' ? ' and every committed block is on disk (rule U2)' : ' and every block on disk is up to date'}.`, { ['l:' + e.lsn]: 'ckpt' });
+      forceLog('Recovery will never need to read the log before this entry.');
+      return;
+    }
+    if (D.mode === 'undo' ? c.list.some(t => statusOf(D, t) === 'active') : c.need.length) return;
+    const e = appendLog({ type: 'ckend' });
+    D.ckpt = null;
+    rec('ckpt', `Append ${En(e)}: ${D.mode === 'undo' ? 'the transactions listed in START CKPT have all finished' : 'all the blocks it waited for are on disk'}.`, { ['l:' + e.lsn]: 'ckpt' });
+    forceLog('The checkpoint is complete.');
+  }
+
+  function wrongBlocks(truth) { return D.names.filter(b => D.disk[b].v !== truth[b].v); }
+  function explainWrong(wrong, truth) {
+    if (!wrong.length) return 'Every block on disk holds its last committed value, so the database is consistent.';
+    const parts = wrong.map(b => {
+      const d = D.disk[b], t = truth[b];
+      if (d.w && statusOf(D, d.w) !== 'committed')
+        return `${Bk(b)} holds ${Vv(b, d)} from ${Tx(d.w)}, which never committed (atomicity is broken)`;
+      return `${Bk(b)} holds ${Vv(b, d)}, but ${t.w ? `${Tx(t.w)} committed ${Vv(b, t)}` : `the committed value is ${Vv(b, t)}`} (durability is broken: a committed update is lost)`;
+    });
+    return `${pl(wrong.length, 'block is', 'blocks are')} wrong: ${parts.join('; ')}.`;
+  }
+
+  function restart() {
+    D.crashed = false;
+    D.base = clone(D.disk);
+    D.epoch++;
+  }
+
+  function opCrash(note = '') {
+    if (D.crashed) return refuse('The system is already down. Run recovery first.');
+    const cached = D.names.filter(b => D.mem[b]), dirty = dirtyBlocks(), lost = D.log.length - D.flushed, act = activeTx();
+    const hl = {};
+    cached.forEach(b => { hl['m:' + b] = 'bad'; });
+    for (let i = D.flushed; i < D.log.length; i++) hl['l:' + i] = 'bad';
+    let msg = `${note}Crash! Everything in memory is lost: ${pl(cached.length, 'buffered block')} (${dirty.length} dirty)`;
+    msg += logged() && lost ? ` and ${pl(lost, 'log entry', 'log entries')} still in the log buffer.` : '.';
+    if (act.length) msg += ` ${act.length === 1 ? 'Transaction' : 'Transactions'} ${list(act.map(Tx))} ${act.length === 1 ? 'dies' : 'die'} unfinished.`;
+    if (D.ckpt) msg += ` The ${D.ckpt.kind === 'quiet' ? 'quiescent' : 'fuzzy'} checkpoint in progress never completes.`;
+    rec('crash', msg, hl);
+
+    D.names.forEach(b => { D.mem[b] = null; });
+    D.log.length = D.flushed;
+    const stableCommit = new Set(D.log.filter(e => e.type === 'commit').map(e => e.t));
+    act.forEach(t => { D.txns[t].status = stableCommit.has(t) ? 'committed' : 'lost'; });
+    D.locks = {};
+    D.ckpt = null;
+    D.crashed = true;
+
+    const truth = truthOf(D), wrong = wrongBlocks(truth);
+    D.lastCrash = { wrong: wrong.length };
+    D.lastRec = null;
+    const whl = {};
+    wrong.forEach(b => { whl['d:' + b] = 'bad'; });
+    let rmsg = `Restart with an empty buffer pool: only the disk${logged() ? ' and the log on disk' : ''} survived. Compare the disk with the committed state. ${explainWrong(wrong, truth)}`;
+    if (!logged()) rmsg += wrong.length ? ' With no log the system cannot even tell which values are wrong, so it carries on with them.' : ' With no log, though, the system has no way to know that.';
+    else rmsg += wrong.length ? ' Run recovery to repair them from the log.' : ' Recovery still has to read the log to be sure of that.';
+    rec(wrong.length ? 'wrong' : 'fine', rmsg, whl, { check: true });
+    if (!logged()) restart();
+    return true;
+  }
+
+  // ----- recovery -----
+  const at = i => ({ ['l:' + i]: 'visit' });
+  function markUnread(lo, hi) { for (let i = lo; i < hi; i++) D.rs.marks[i] = 'unread'; }
+  function txnSets() {
+    const started = [], committed = new Set(), aborted = new Set();
+    for (const e of D.log) {
+      if (e.type === 'start') started.push(e.t);
+      else if (e.type === 'commit') committed.add(e.t);
+      else if (e.type === 'abort') aborted.add(e.t);
+    }
+    return { committed, aborted, incomplete: started.filter(t => !committed.has(t) && !aborted.has(t)) };
+  }
+  // The last checkpoint recovery may rely on: a quiescent ⟨CKPT⟩, or a ⟨START CKPT⟩ whose ⟨END CKPT⟩ reached disk.
+  function lastCheckpoint() {
+    let q = -1, end = -1, ust = -1;
+    D.log.forEach((e, i) => { if (e.type === 'ckpt') q = i; else if (e.type === 'ckend') end = i; else if (e.type === 'ckstart') ust = i; });
+    let ck = null;
+    if (end > q) { let s = end - 1; while (s >= 0 && D.log[s].type !== 'ckstart') s--; if (s >= 0) ck = { kind: 'fuzzy', start: s, end }; }
+    else if (q >= 0) ck = { kind: 'quiet', at: q };
+    return { ck, unfinished: ust > Math.max(q, end) ? ust : -1 };
+  }
+  function skipWhy(e) {
+    switch (e.type) {
+      case 'start': return 'nothing to do.';
+      case 'commit': case 'abort': return 'already noted in the first pass.';
+      case 'undo': return 'an undo entry; only the undo pass uses it.';
+      case 'redo': return 'a redo entry; the undo pass does not need it.';
+      default: return 'nothing to do in this pass.';
+    }
+  }
+
+  function recoverUndo(st) {
+    const n = D.log.length, done = new Set(), seen = new Set();
+    let endSeen = false, waitFor = null, last = 0;
+    rec('scan', 'Undo recovery: read the log backward from its last entry on disk. Undo every change of a transaction that has neither ⟨COMMIT⟩ nor ⟨ABORT⟩.');
+    for (let i = n - 1; i >= 0; i--) {
+      const e = D.log[i];
+      st.reads++; last = i;
+      let stop = false;
+      switch (e.type) {
+        case 'commit': case 'abort':
+          done.add(e.t);
+          rec('scan', `${En(e)}: ${Tx(e.t)} ${e.type === 'commit' ? 'committed, and rule U2 put all its changes on disk before this entry' : 'aborted, and its changes were undone before this entry'}. Ignore its entries from here on.`, at(i));
+          break;
+        case 'undo':
+          if (done.has(e.t)) rec('skip', `${En(e)}: ${Tx(e.t)} finished, so leave ${Bk(e.b)} alone.`, at(i));
+          else {
+            D.mem[e.b] = { ...e.val }; st.undone++;
+            rec('undo', `${En(e)}: ${Tx(e.t)} is incomplete, so restore ${Bk(e.b)} to the old value ${Vv(e.b, e.val)}.`, { ...at(i), ['m:' + e.b]: 'ok' });
+          }
+          break;
+        case 'start': {
+          seen.add(e.t);
+          let msg = `${En(e)}: ${done.has(e.t) ? 'nothing to do.' : `every change of incomplete ${Tx(e.t)} is now undone.`}`;
+          if (waitFor && waitFor.every(t => seen.has(t))) { stop = true; msg += ' That was the last START the scan was looking for, so stop.'; }
+          rec('scan', msg, at(i));
+          break;
+        }
+        case 'ckpt':
+          stop = true;
+          rec('ckpt', `${En(e)}: a quiescent checkpoint. Every transaction before it had finished, so stop here.`, { ['l:' + i]: 'ckpt' });
+          break;
+        case 'ckend':
+          if (waitFor) rec('skip', `${En(e)}: an older checkpoint; keep looking for the START of ${list(waitFor.filter(t => !seen.has(t)).map(Tx))}.`, at(i));
+          else { endSeen = true; rec('ckpt', `${En(e)}: the transactions listed in the matching START CKPT have all finished, so the scan only has to go back as far as that START CKPT.`, { ['l:' + i]: 'ckpt' }); }
+          break;
+        case 'ckstart': {
+          if (waitFor) { rec('skip', `${En(e)}: an older checkpoint; keep looking for the START of ${list(waitFor.filter(t => !seen.has(t)).map(Tx))}.`, at(i)); break; }
+          if (endSeen) { stop = true; rec('ckpt', `${En(e)}: the start of the completed checkpoint. No incomplete transaction has entries before it, so stop.`, { ['l:' + i]: 'ckpt' }); break; }
+          const inc = e.list.filter(t => !done.has(t));
+          if (!inc.length) { stop = true; rec('ckpt', `${En(e)} has no END CKPT, but every transaction it lists has finished, so stop here.`, { ['l:' + i]: 'ckpt' }); break; }
+          waitFor = inc;
+          rec('ckpt', `${En(e)} has no matching END CKPT: the crash interrupted this checkpoint. ${list(inc.map(Tx))} ${inc.length === 1 ? 'was' : 'were'} active when it began and never finished, so keep reading back to ${inc.length === 1 ? 'its' : 'their'} START.`, { ['l:' + i]: 'ckpt' });
+          break;
+        }
+      }
+      if (stop) break;
+    }
+    if (last > 0) { markUnread(0, last); rec('stop', `The scan stops here: the ${pl(last, 'older entry', 'older entries')} ${last === 1 ? 'is' : 'are'} never read.`); }
+  }
+
+  function recoverRedo(st) {
+    // redo logging only has quiescent checkpoints
+    const n = D.log.length, { committed, aborted, incomplete } = txnSets(), { ck } = lastCheckpoint();
+    let from = 0, why = 'There is no checkpoint, so redo starts at the beginning of the log.';
+    if (ck) { from = ck.at; why = `The last checkpoint is ${En(D.log[ck.at])} (entry ${ck.at + 1}): everything before it is on disk, so redo begins there.`; }
+    markUnread(0, from);
+    st.reads += n - from;
+    const cm = [...committed].filter(t => D.log.findIndex(e => e.type === 'commit' && e.t === t) >= from);
+    const hl = {};
+    for (let i = from; i < n; i++) if (D.log[i].type === 'commit') hl['l:' + i] = 'visit';
+    rec('scan', `Redo recovery, first pass: read the log backward to find the committed transactions. ` +
+      (cm.length ? `${list(cm.map(Tx))} ${cm.length === 1 ? 'has' : 'have'} ⟨COMMIT⟩ on disk. ` : 'No transaction in range has ⟨COMMIT⟩ on disk. ') +
+      (incomplete.length ? `${list(incomplete.map(Tx))} never committed, and with no steal none of ${incomplete.length === 1 ? 'its' : 'their'} values reached disk. ` : '') + why, hl);
+    rec('scan', `Second pass: read forward from entry ${from + 1} and redo every change of a committed transaction, earliest first.`);
+    for (let i = from; i < n; i++) {
+      const e = D.log[i];
+      st.reads++;
+      if (e.type === 'redo' && committed.has(e.t)) {
+        D.mem[e.b] = { ...e.val }; st.redone++;
+        rec('redo', `${En(e)}: ${Tx(e.t)} committed, so set ${Bk(e.b)} to ${Vv(e.b, e.val)}.`, { ...at(i), ['m:' + e.b]: 'ok' });
+      } else if (e.type === 'redo') rec('skip', `${En(e)}: ${Tx(e.t)} ${aborted.has(e.t) ? 'aborted' : 'never committed'}, so skip it.`, at(i));
+      else rec('skip', `${En(e)}: ${skipWhy(e)}`, at(i));
+    }
+  }
+
+  function recoverUR(st) {
+    const n = D.log.length, { committed, aborted, incomplete } = txnSets(), { ck, unfinished } = lastCheckpoint();
+    let from = 0, why = 'There is no completed checkpoint, so redo starts at the beginning of the log.';
+    if (ck && ck.kind === 'fuzzy') { from = ck.start; why = `The last completed checkpoint is ${En(D.log[ck.start])} … ${En(D.log[ck.end])}: every block that was dirty at its START CKPT was written to disk, so redo begins at the START CKPT, entry ${from + 1}.`; }
+    else if (ck) { from = ck.at; why = `The last checkpoint is ${En(D.log[ck.at])} (entry ${ck.at + 1}): everything before it is on disk, so redo begins there.`; }
+    if (unfinished >= 0) why += ` The later ${En(D.log[unfinished])} has no END CKPT, so it cannot be used.`;
+    let stop = n;
+    incomplete.forEach(t => { const i = startIdx(t); if (i < stop) stop = i; });
+    const lo = Math.min(from, stop);
+    markUnread(0, lo);
+    st.reads += n - lo;
+    const hl = {};
+    for (let i = lo; i < n; i++) if (D.log[i].type === 'commit' || D.log[i].type === 'abort') hl['l:' + i] = 'visit';
+    const cm = [...committed].filter(t => D.log.findIndex(e => e.type === 'commit' && e.t === t) >= lo);
+    rec('scan', `Undo/redo recovery, first pass: read the log backward and sort the transactions. Committed: ${cm.length ? list(cm.map(Tx)) : 'none'}. ` +
+      `Incomplete (no COMMIT or ABORT): ${incomplete.length ? list(incomplete.map(Tx)) : 'none'}. ${why} ` +
+      (incomplete.length ? `Undo must reach back to entry ${stop + 1}, the earliest START of an incomplete transaction.` : 'No transaction is incomplete, so there is nothing to undo.'), hl);
+    rec('scan', `Redo pass: read forward from entry ${from + 1} and redo every change of a committed transaction, earliest first.`);
+    for (let i = from; i < n; i++) {
+      const e = D.log[i];
+      st.reads++;
+      if (e.type === 'redo' && committed.has(e.t)) {
+        D.mem[e.b] = { ...e.val }; st.redone++;
+        rec('redo', `${En(e)}: ${Tx(e.t)} committed, so set ${Bk(e.b)} to the new value ${Vv(e.b, e.val)}.`, { ...at(i), ['m:' + e.b]: 'ok' });
+      } else if (e.type === 'redo') rec('skip', `${En(e)}: ${Tx(e.t)} ${aborted.has(e.t) ? 'aborted' : 'never committed'}, so do not redo it.`, at(i));
+      else rec('skip', `${En(e)}: ${skipWhy(e)}`, at(i));
+    }
+    if (!incomplete.length) return;
+    const inc = new Set(incomplete);
+    rec('scan', `Undo pass: read backward from the last entry and undo every change of ${list(incomplete.map(Tx))}, latest first.`);
+    for (let i = n - 1; i >= stop; i--) {
+      const e = D.log[i];
+      st.reads++;
+      if (e.type === 'undo' && inc.has(e.t)) {
+        D.mem[e.b] = { ...e.val }; st.undone++;
+        rec('undo', `${En(e)}: ${Tx(e.t)} is incomplete, so restore ${Bk(e.b)} to the old value ${Vv(e.b, e.val)}.`, { ...at(i), ['m:' + e.b]: 'ok' });
+      } else if (e.type === 'undo') rec('skip', `${En(e)}: ${Tx(e.t)} finished, so do not undo it.`, at(i));
+      else if (e.type === 'start' && inc.has(e.t)) rec('scan', `${En(e)}: every change of ${Tx(e.t)} is now undone.${i === stop ? ' This is the earliest incomplete START, so the undo pass ends.' : ''}`, at(i));
+      else rec('skip', `${En(e)}: ${e.type === 'redo' ? skipWhy(e) : 'nothing to undo.'}`, at(i));
+    }
+  }
+
+  function opRecover() {
+    if (!D.crashed) return refuse(logged() ? 'Nothing to recover: the system has not crashed.' : 'There is no log, so there is nothing to recover from.');
+    D.rs = { truth: truthOf(D), marks: {} };
+    const st = { reads: 0, undone: 0, redone: 0 };
+    if (D.mode === 'undo') recoverUndo(st);
+    else if (D.mode === 'redo') recoverRedo(st);
+    else recoverUR(st);
+
+    const fix = dirtyBlocks();
+    if (fix.length) {
+      fix.forEach(b => { D.disk[b] = { ...D.mem[b] }; });
+      const hl = {};
+      fix.forEach(b => { hl['m:' + b] = 'ok'; hl['d:' + b] = 'ok'; });
+      rec('diskw', `Write the ${pl(fix.length, 'block')} changed by recovery to disk: ${list(fix.map(Bk))}.`, hl, { moves: fix.map(b => ({ b, dir: 'down' })) });
+    }
+    // ABORT goes to every transaction the log shows as incomplete, including one that had aborted but whose
+    // ABORT entry was lost in the log buffer; otherwise a later recovery would undo it again.
+    const traced = txnSets().incomplete;
+    D.order.forEach(t => { if (D.txns[t].status === 'lost') D.txns[t].status = 'aborted'; });
+    if (traced.length) {
+      const es = traced.map(t => appendLog({ type: 'abort', t })), hl = {};
+      es.forEach(e => { hl['l:' + e.lsn] = 'focus'; });
+      rec('log', `Append ${es.map(En).join(' ')} so that a later recovery knows ${traced.length === 1 ? 'this transaction has' : 'these transactions have'} finished.`, hl);
+      forceLog('');
+    }
+    const wrong = wrongBlocks(D.rs.truth), hl = {};
+    D.lastRec = { reads: st.reads, undone: st.undone, redone: st.redone, wrong: wrong.length, writes: fix.length };
+    D.names.forEach(b => { hl['d:' + b] = wrong.includes(b) ? 'bad' : 'ok'; });
+    rec(wrong.length ? 'wrong' : 'done', wrong.length
+      ? `Recovery finished, but ${explainWrong(wrong, D.rs.truth)}`
+      : `Recovery complete after reading ${pl(st.reads, 'log entry', 'log entries')} (${st.undone} undone, ${st.redone} redone). Every block on disk holds its last committed value: the database is consistent again.`, hl);
+    D.rs = null;
+    restart();
+    return true;
+  }
+
+  function applyOp(o) {
+    if (o.op === 'info') { rec('info', o.msg); return true; }   // narration only
+    let ok;
+    switch (o.op) {
+      case 'start': ok = opStart(o.t); break;
+      case 'write': ok = opWrite(o.t, o.b); break;
+      case 'commit': ok = opCommit(o.t, false); break;
+      case 'commitcrash': ok = opCommit(o.t, true); break;
+      case 'abort': ok = opAbort(o.t); break;
+      case 'evict': ok = opEvict(o.b); break;
+      case 'force': ok = opForce(); break;
+      case 'ckpt': ok = opCkpt(false); break;
+      case 'fuzzy': ok = opCkpt(true); break;
+      case 'crash': ok = opCrash(); break;
+      case 'recover': ok = opRecover(); break;
+      default: ok = false;
+    }
+    if (ok) ckptAdvance();
+    return ok;
+  }
+
+  function replay(scr, mode, nb, force) {
+    const keep = { D, steps, recording };
+    D = newState(mode, nb, force); steps = []; recording = false;
+    const refused = [];
+    for (const o of scr) if (!applyOp(o)) refused.push(o);
+    const out = D;
+    ({ D, steps, recording } = keep);
+    return { state: out, refused };
+  }
+
+  // Replay the same actions under every method, crash (at the last recorded crash, or now), then recover.
+  function compareModes(scr, nb, force) {
+    scr = scr.filter(o => o.op !== 'info');
+    let cut = -1;
+    for (let i = scr.length - 1; i >= 0; i--) if (scr[i].op === 'crash' || scr[i].op === 'commitcrash') { cut = i; break; }
+    const useLast = cut >= 0 && scr.slice(cut + 1).every(o => o.op === 'recover');
+    const upto = useLast ? scr.slice(0, cut + 1) : scr;
+    const rows = MODES.map(mode => {
+      const { state, refused } = replay(upto, mode, nb, force);
+      const keep = { D, steps, recording };
+      D = state; steps = []; recording = false;
+      const row = { mode, refused: refused.length, diskWrites: D.stats.diskWrites, logForces: D.stats.logForces, logLen: D.log.length };
+      if (!useLast && !D.crashed) opCrash();
+      row.wrongCrash = D.lastCrash ? D.lastCrash.wrong : 0;
+      if (D.crashed) opRecover();
+      row.rec = D.lastRec;
+      row.wrongAfter = D.lastRec ? D.lastRec.wrong : row.wrongCrash;
+      ({ D, steps, recording } = keep);
+      return row;
+    });
+    return { rows, at: useLast ? cut + 1 : null };
+  }
+  // ---------- operations ----------
+
+  function opLabel(o) {
+    switch (o.op) {
+      case 'start': return `start ${o.t}`;
+      case 'write': return `${o.t} writes ${o.b}`;
+      case 'commit': return `commit ${o.t}`;
+      case 'commitcrash': return `commit ${o.t} with a crash`;
+      case 'abort': return `abort ${o.t}`;
+      case 'evict': return `evict ${o.b}`;
+      case 'force': return 'force the log';
+      case 'ckpt': return 'checkpoint';
+      case 'fuzzy': return 'fuzzy checkpoint';
+      case 'crash': return 'crash';
+      default: return 'recovery';
+    }
+  }
+  // The run is a timeline: base (method, blocks, force) and script, the recipe of ops. Each op carries a, the number
+  // of the user action it belongs to (one click may evict several blocks); 'info' ops only narrate. steps holds every
+  // step of the run, each tagged with its action. D is the state after the action of the step on screen (action Da),
+  // so a new action taken from an earlier step continues from there and discards the later ones (Undo restores them).
+  // The step buttons walk view: every step, or (by action) one step per action, except that a recovery stays one step
+  // per log entry. cur indexes view; each view entry knows the range first..last of the steps it covers.
+  let base = { mode: 'naive', nb: 8, force: true }, Da = 0;
+  const lastA = () => script.length ? script[script.length - 1].a : 0;
+  const nActs = scr => new Set(scr.filter(o => o.op !== 'info').map(o => o.a)).size;
+  const stateAt = a => replay(script.filter(o => o.a <= a), base.mode, base.nb, base.force).state;
+  function snapshotAll() { return { base: { ...base }, script: script.slice(), steps: steps.slice(), d: view.length ? view[cur].last : 0, sel: S.cur }; }
+  // supporting kinds never name a whole action: a write is a read plus a write, a commit forces the log, and so on
+  const SUPPORT = new Set(['read', 'force', 'log', 'diskw', 'info', 'restore']);
+  function mergeSteps(grp, first) {
+    const last = grp[grp.length - 1];
+    let hl = {}, moves = {};
+    for (const s of grp) {
+      if (s.check) { hl = {}; moves = {}; }   // the restart after a crash starts the picture afresh
+      Object.assign(hl, s.hl);
+      for (const m of s.moves || []) moves[m.b] = m;
+    }
+    const main = [...grp].reverse().find(s => !SUPPORT.has(s.kind)) || last;
+    const seen = new Set(), msg = grp.map(s => s.msg).join(' ').split(/(?<=\.) /).filter(x => !seen.has(x) && seen.add(x)).join(' ');
+    return { ...last, kind: main.kind, msg, hl, moves: Object.values(moves), first, last: first + grp.length - 1 };
+  }
+  function rebuildView() {
+    view = [];
+    for (let i = 0; i < steps.length;) {
+      let j = i;
+      while (j + 1 < steps.length && steps[j + 1].a === steps[i].a) j++;
+      const grp = steps.slice(i, j + 1);
+      if (S.by === 'detail' || grp.length === 1 || grp.some(s => s.op === 'recover')) grp.forEach((s, k) => view.push({ ...s, first: i + k, last: i + k }));
+      else view.push(mergeSteps(grp, i));
+      i = j + 1;
+    }
+  }
+  const viewIdxOf = d => { const i = view.findIndex(v => v.last >= d); return i < 0 ? view.length - 1 : i; };
+  function pushHistory(s) { history.push(s); if (history.length > 300) history.shift(); }
+  function pickCur() {
+    const act = activeTx();
+    if (!S.cur || !act.includes(S.cur)) S.cur = act.length ? act[act.length - 1] : null;
+  }
+  // apply an op on the live state, record its steps under action a, and add it to the recipe
+  function applyTagged(o, a) {
+    const n0 = steps.length;
+    applyOp(o);
+    for (let i = n0; i < steps.length; i++) { steps[i].a = a; steps[i].op = o.op; }
+    script.push({ ...o, a });
+  }
+  // rebuild the whole timeline from base and script, recording every step
+  function buildTimeline() {
+    const scr = script;
+    D = newState(base.mode, base.nb, base.force); steps = []; script = []; recording = true;
+    for (const o of scr) applyTagged(o, o.a);
+    Da = lastA();
+  }
+  function addInfo(msg) { const a = lastA() + 1; applyTagged({ op: 'info', msg }, a); Da = a; }
+  // keep D on the action of the step on screen
+  function syncView(force) {
+    const a = view[cur].a;
+    if (!force && a === Da) return;
+    D = stateAt(a); Da = a;
+    pickCur();
+    refreshUI();
+  }
+
+  function run(ops) {
+    stopPlay();
+    pushHistory(snapshotAll());
+    syncView(false);
+    const at = Da;
+    let note = '';
+    if (at < lastA()) {
+      const lost = nActs(script.filter(o => o.a > at));
+      script = script.filter(o => o.a <= at);
+      steps = steps.filter(s => s.a <= at);
+      if (lost) note = `Continue from here: the ${pl(lost, 'later action')} recorded after it ${lost === 1 ? 'was' : 'were'} discarded (Ctrl+Z brings ${lost === 1 ? 'it' : 'them'} back).`;
+    }
+    const a = lastA() + 1;
+    if (note) applyTagged({ op: 'info', msg: note }, a);
+    let recovery = false;
+    for (const o of ops) {
+      applyTagged(o, a);
+      if (o.op === 'start' && D.txns[o.t] && D.txns[o.t].status === 'active') S.cur = o.t;
+      if (o.op === 'recover') recovery = true;
+    }
+    Da = a;
+    pickCur();
+    renderLog();
+    const from = view.findIndex(v => v.a === a);
+    if (recovery) showStep(from);
+    else if (S.animate && view.length - 1 > from) { showStep(from); playing = true; updatePlayBtn(); schedule(); }
+    else showStep(view.length - 1);
+    refreshUI();
+  }
+
+  function showLast() {
+    pickCur();
+    renderLog();
+    showStep(view.length - 1);
+    refreshUI();
+  }
+
+  function rebuild(mode, nb, force, why) {
+    stopPlay();
+    pushHistory(snapshotAll());
+    script = script.filter(o => o.op !== 'info');
+    const r = replay(script, mode, nb, force);
+    base = { mode, nb, force };
+    buildTimeline();
+    const shown = r.refused.slice(0, 6).map(opLabel).join(', ') + (r.refused.length > 6 ? ', …' : '');
+    S.cur = null;
+    addInfo(`${why} Replayed the ${pl(nActs(script), 'recorded action')} under ${MODE_NAME[mode]}; step back to see each of them.` +
+      (r.refused.length ? ` ${pl(r.refused.length, 'operation was', 'operations were')} not allowed: ${shown}.` : ' Every operation was allowed.'));
+    showLast();
+  }
+
+  function loadScript(scr, why) {
+    stopPlay();
+    if (steps.length) pushHistory(snapshotAll());
+    script = scr.map((o, i) => ({ ...o, a: i + 1 }));
+    buildTimeline();
+    S.cur = null;
+    addInfo(why);
+    showLast();
+  }
+
+  function undo() {
+    if (!history.length) return;
+    stopPlay();
+    const s = history.pop();
+    base = s.base; script = s.script; steps = s.steps; S.cur = s.sel;
+    renderLog();
+    cur = viewIdxOf(s.d);
+    syncView(true);
+    showStep(cur, false);
+  }
+
+  // ---------- save and open ----------
+  const FILE_VERSION = 2, MAXOPS = 3000;
+  const OPNAMES = new Set(['start', 'write', 'commit', 'commitcrash', 'abort', 'evict', 'force', 'ckpt', 'fuzzy', 'crash', 'recover', 'info']);
+  const TXOPS = new Set(['start', 'write', 'commit', 'commitcrash', 'abort']);
+  const cleanText = s => String(s ?? '').slice(0, 4000).replace(/<[^>]*>/g, '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // ops in the file: { t: action number (1, 2, …), op, tx?: transaction, b?: block, msg?: text of an info op }
+  function exportRun() {
+    const num = new Map();
+    const ops = script.map(o => {
+      if (!num.has(o.a)) num.set(o.a, num.size + 1);
+      const x = { t: num.get(o.a), op: o.op };
+      if (o.t) x.tx = o.t;
+      if (o.b) x.b = o.b;
+      if (o.op === 'info') x.msg = o.msg;
+      return x;
+    });
+    return {
+      app: 'recovery', version: FILE_VERSION, saved: new Date().toISOString(), note: $('saveNote').value.trim(),
+      seed: 0, base: { ...base }, ops, end: num.size, steps: steps.length, cur, by: S.by, sel: S.cur,
+      at: { step: cur + 1, of: view.length, caption: view[cur].msg.replace(/<[^>]+>/g, '') }
+    };
+  }
+  function saveRun() {
+    const data = exportRun(), name = `recovery-${data.base.mode}-step-${data.at.step}.json`;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setFileMsg(`Saved ${name}: ${pl(nActs(script), 'action')} under ${MODE_NAME[data.base.mode]}, opening at step ${data.at.step} of ${data.at.of}.`);
+  }
+  // everything in a file is checked and clamped, since students exchange them
+  function importRun(d) {
+    if (!d || d.app !== 'recovery' || !Array.isArray(d.ops)) throw new Error('this is not a Crash Recovery file');
+    if (d.version > FILE_VERSION) throw new Error('it was saved by a newer version of this page');
+    if (d.ops.length > MAXOPS) throw new Error('it holds too many actions');
+    const b = d.base && typeof d.base === 'object' ? d.base : {};
+    const nbase = {
+      mode: MODES.includes(b.mode) ? b.mode : 'naive',
+      nb: Math.max(4, Math.min(12, Math.round(Number(b.nb)) || 8)),
+      force: b.force === undefined ? true : !!b.force
+    };
+    const scr = [];
+    let prev = 0;
+    for (const o of d.ops) {
+      if (!o || typeof o !== 'object' || !OPNAMES.has(o.op)) throw new Error('it contains an unknown action');
+      const t = Math.round(Number(o.t));
+      if (!(t >= 1 && t <= MAXOPS)) throw new Error('an action has an invalid position');
+      if (t < prev) throw new Error('its actions are out of order');
+      const x = { op: o.op, a: t };
+      if (TXOPS.has(o.op)) {
+        if (typeof o.tx !== 'string' || !/^T\d{1,5}$/.test(o.tx)) throw new Error('it names an invalid transaction');
+        x.t = o.tx;
+      }
+      if (o.op === 'write' || o.op === 'evict') {
+        if (typeof o.b !== 'string' || !/^[A-L]$/.test(o.b)) throw new Error('it names an invalid block');
+        x.b = o.b;
+      }
+      if (o.op === 'info') x.msg = cleanText(o.msg);
+      scr.push(x);
+      prev = t;
+    }
+    const old = d.version === 1;   // version 1 kept only the last action's steps and a closing text in info
+    if (old && typeof d.info === 'string') scr.push({ op: 'info', msg: cleanText(d.info), a: prev + 1 });
+
+    stopPlay();
+    pushHistory(snapshotAll());
+    base = nbase; script = scr;
+    buildTimeline();
+    if (!steps.length) addInfo('Opened a saved run with no actions.');
+    $('saveNote').value = typeof d.note === 'string' ? d.note.slice(0, 2000) : '';
+    setBy(!old && d.by === 'action' ? 'action' : 'detail', false);
+    renderLog();
+    cur = old ? view.length - 1 : Math.max(0, Math.min(view.length - 1, Math.round(Number(d.cur)) || 0));
+    S.cur = typeof d.sel === 'string' ? d.sel : null;
+    syncView(true);
+    shownStep = null;
+    showStep(cur, false);
+    return { step: cur + 1, total: view.length, actions: nActs(script), mode: base.mode, note: $('saveNote').value, exact: old || d.steps === undefined || d.steps === steps.length };
+  }
+  function openFile(file) {
+    if (!file) return;
+    file.text().then(txt => {
+      const r = importRun(JSON.parse(txt));
+      setFileMsg(`Opened ${file.name}: ${pl(r.actions, 'action')} under ${MODE_NAME[r.mode]}, at step ${r.step} of ${r.total}.` +
+        (r.note ? ' Its note is shown above.' : '') +
+        (r.exact ? '' : ' Warning: the replay differs from the saved run; it may come from another version of this page.'), !r.exact);
+    }).catch(err => setFileMsg(`Could not open ${file.name}: ${err.message}.`, true));
+  }
+  function setFileMsg(t, isErr) { const m = $('fileMsg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
+
+  // ---------- drawing ----------
+  const f1 = v => (Math.round(v * 10) / 10).toString();
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const GLYPH = { committed: '✓', active: '…', aborted: '✗', lost: '✗' };
+  function geom(s) {
+    const nb = s.names.length;
+    const dataW = Math.max(nb * CP - (CP - CW), 10 * (EW + EGAP) - EGAP);
+    const memY = 0, diskY = CH + ARZ, logY = diskY + CH + 52;
+    return { nb, dataW, memY, diskY, logY };
+  }
+  const entW = e => e.type === 'ckstart' ? Math.max(EW + 22, 18 + 7.6 * `(${e.list.join(',')})`.length) : EW;
+  function logLayout(log, width) {
+    const pos = [];
+    let x = 0, y = 0;
+    log.forEach((e, i) => {
+      const w = entW(e);
+      const paired = e.type === 'redo' && i > 0 && log[i - 1].type === 'undo' && log[i - 1].t === e.t && log[i - 1].b === e.b;
+      const startsPair = e.type === 'undo' && log[i + 1] && log[i + 1].type === 'redo' && log[i + 1].t === e.t && log[i + 1].b === e.b;
+      const need = w + (startsPair ? PGAP + EW : 0);
+      if (i > 0) {
+        const gap = paired ? PGAP : EGAP;
+        if (!paired && x + gap + need > width) { x = 0; y += ROWP; } else x += gap;
+      }
+      pos.push({ x, y, w });
+      x += w;
+    });
+    return pos;
+  }
+
+  function cellSvg(k, b, val, x, y, cls, op, s, o) {
+    let g = `<g class="cell ${k}${cls ? ' s-' + cls : ''}" data-b="${b}" data-k="${k}" transform="translate(${x},${y})" opacity="${op}">`;
+    if (!val) {
+      g += `<rect class="slot" x="1" y="1" width="${CW - 2}" height="${CH - 2}" rx="8"/><text class="cid" x="9" y="14">${b}</text>` +
+           `<text class="cnone" x="${CW / 2}" y="${CH / 2 + 4}">not loaded</text>`;
+    } else {
+      const st = val.w ? s.status[val.w] : null;
+      g += `<rect class="frame" width="${CW}" height="${CH}" rx="8"/><text class="cid" x="9" y="14">${b}</text>` +
+           `<text class="cv" x="${CW / 2}" y="${CH / 2 + 1}">${vn(b, val.v)}</text>` +
+           `<text class="cw${st && st !== 'committed' ? ' unc' : ''}" x="${CW / 2}" y="${CH - 12}">${val.w ? `${val.w} ${GLYPH[st] || ''}` : 'initial'}</text>` +
+           `<rect class="outline" width="${CW}" height="${CH}" rx="8"/>`;
+      if (o.dirty) g += '<circle class="dirty" cx="' + (CW - 11) + '" cy="12" r="4.5"/>';
+    }
+    if (o.lock) g += `<text class="lock" x="${CW / 2}" y="-10">lock: ${o.lock}</text>`;
+    if (o.note) g += `<text class="note" x="${CW / 2}" y="${CH + 14}">${o.note}</text>`;
+    if (k === 'm') g += `<title>Click: the selected transaction writes ${b}. Shift+click: evict ${b}.</title>`;
+    return g + '</g>';
+  }
+
+  function entSvg(e, p, logY, cls, tail, unread, op, firstTail) {
+    const w = p.w, c = f1(w / 2), ck = e.type.startsWith('ck');
+    const T = (cl, yy, txt) => `<text class="${cl}" x="${c}" y="${yy}">${txt}</text>`;
+    let g = `<g class="ent k-${e.type}${tail ? ' tail' : ''}${cls ? ' s-' + cls : ''}" transform="translate(${f1(p.x)},${logY + p.y})" opacity="${op}">`;
+    if (firstTail) g += '<text class="bufnote" x="0" y="-11">log buffer (memory), not yet on disk ▸</text>';
+    g += `<g${unread ? ' class="unread"' : ''}>`;
+    if (cls) g += `<rect class="ring" x="-4" y="-4" width="${f1(w + 8)}" height="${EH + 8}" rx="9"/>`;
+    g += `<rect class="eb" width="${f1(w)}" height="${EH}" rx="6"/>`;
+    if (ck) g += `<rect class="eb2" x="3.5" y="3.5" width="${f1(w - 7)}" height="${EH - 7}" rx="4"/>`;
+    g += `<text class="elsn" x="5" y="9">${e.lsn + 1}</text>`;
+    switch (e.type) {
+      case 'start': g += T('et', 26, e.t) + T('ew', 45, 'START'); break;
+      case 'undo': case 'redo': g += T('et', 20, e.t) + T('ev', 37, `${e.b}:${vn(e.b, e.val.v)}`) + T('ek', 53, e.type); break;
+      case 'commit': g += T('et', 24, e.t) + T('ew', 44, 'COMMIT'); break;
+      case 'abort': g += T('et', 24, e.t) + T('ew', 44, 'ABORT'); break;
+      case 'ckstart': g += T('ew', 23, 'START CKPT') + T('et', 42, `(${e.list.join(',')})`); break;
+      case 'ckend': g += T('ew', 24, 'END') + T('ew', 41, 'CKPT'); break;
+      default: g += T('ew', 32, 'CKPT');
+    }
+    return g + `<title>Entry ${e.lsn + 1}: ${entText(e)}${tail ? ' (log buffer)' : ''}</title></g></g>`;
+  }
+
+  function itemsOf(st, live) {
+    const s = st.snap, g = geom(s), out = [];
+    const hl = live ? st.hl : {}, need = new Set(s.need);
+    s.names.forEach((b, j) => {
+      const x = j * CP, m = s.mem[b], d = s.disk[b], tr = s.truth[b];
+      const dirty = !!m && m.v !== d.v;
+      let mc = hl['m:' + b] || '', dc = hl['d:' + b] || '';
+      if (live && st.check) { if (m && m.v !== tr.v) mc = 'bad'; if (d.v !== tr.v) dc = 'bad'; }
+      if (live && !mc && need.has(b)) mc = 'ckpt';
+      const note = live && st.check && d.v !== tr.v ? `should be ${vn(b, tr.v)}` : '';
+      out.push({ key: `m:${b}:${m ? m.v + (dirty ? 'd' : '') : '-'}`, html: op => cellSvg('m', b, m, x, g.memY, mc, op, s, { dirty, lock: s.locks[b] }) });
+      out.push({ key: `d:${b}:${d.v}`, html: op => cellSvg('d', b, d, x, g.diskY, dc, op, s, { note }) });
+    });
+    const pos = logLayout(s.log, g.dataW);
+    s.log.forEach((e, i) => {
+      const tail = i >= s.flushed, cls = hl['l:' + i] || '', unread = live && st.marks && st.marks[i] === 'unread';
+      out.push({
+        key: `l:${i}:${e.type}:${e.t || ''}:${e.b || ''}:${e.val ? e.val.v : ''}:${tail ? 1 : 0}`,
+        html: op => entSvg(e, pos[i], g.logY, cls, tail, unread, op, live && tail && i === s.flushed)
+      });
+    });
+    out.rows = pos.length ? pos[pos.length - 1].y + EH : EH;
+    return out;
+  }
+
+  const DEFS = '<defs>' +
+    '<marker id="ahDown" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="ah down" d="M0 0L10 5L0 10z"/></marker>' +
+    '<marker id="ahUp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="ah up" d="M0 0L10 5L0 10z"/></marker>' +
+    '</defs>';
+
+  function render(st, prev, t) {
+    const s = st.snap, g = geom(s);
+    const now = itemsOf(st, true);
+    let body = '';
+    if (prev && t < 1) {
+      const old = itemsOf(prev, false), nk = new Set(now.map(i => i.key)), ok = new Set(old.map(i => i.key));
+      for (const it of old) if (!nk.has(it.key)) body += it.html((1 - t).toFixed(3));
+      for (const it of now) body += it.html(ok.has(it.key) ? 1 : t.toFixed(3));
+    } else for (const it of now) body += it.html(1);
+
+    let labels = '';
+    const lab = (y, a, b) => `<text class="rowlab" x="-20" y="${y - 9}">${a}</text><text class="rowsub" x="-20" y="${y + 11}">${b}</text>`;
+    labels += lab(g.memY + CH / 2, 'Memory', 'buffer pool');
+    labels += lab(g.diskY + CH / 2, 'Disk', 'backing store');
+    labels += lab(g.logY + EH / 2, 'Log', s.mode === 'naive' ? 'none' : 'disk + buffer');
+    if (s.mode === 'naive') labels += `<text class="emptylog" x="0" y="${g.logY + EH / 2}">No log: the naive method keeps nothing but the data blocks.</text>`;
+    else if (!s.log.length) labels += `<text class="emptylog" x="0" y="${g.logY + EH / 2}">The log is empty.</text>`;
+
+    let moves = '';
+    for (const mv of st.moves || []) {
+      const j = s.names.indexOf(mv.b);
+      if (j < 0) continue;
+      const cx = j * CP + CW / 2, top = g.memY + CH + 6, bot = g.diskY - 6;
+      moves += mv.dir === 'down'
+        ? `<path class="mv down" marker-end="url(#ahDown)" d="M${cx} ${top} L${cx} ${bot - 4}"/>`
+        : `<path class="mv up" marker-end="url(#ahUp)" d="M${cx} ${bot} L${cx} ${top + 4}"/>`;
+      if (prev && t < 1) {
+        const val = mv.dir === 'down' ? s.disk[mv.b] : s.mem[mv.b];
+        if (val) {
+          const y0 = mv.dir === 'down' ? g.memY + CH / 2 : g.diskY + CH / 2, y1 = mv.dir === 'down' ? g.diskY + CH / 2 : g.memY + CH / 2;
+          const y = lerp(y0, y1, t);
+          moves += `<g class="chip" transform="translate(${cx - 22},${f1(y - 13)})"><rect width="44" height="26" rx="13"/><text x="22" y="13">${vn(mv.b, val.v)}</text></g>`;
+        }
+      }
+    }
+
+    const vbX = -LABW - PAD, vbY = -PAD - 16, vbW = LABW + g.dataW + PAD * 2, vbH = g.logY + now.rows + PAD * 2 + 16;
+    const svg = $('svg');
+    svg.setAttribute('viewBox', `${vbX} ${vbY} ${f1(vbW)} ${f1(vbH)}`);
+    const avail = Math.max(200, $('stage').clientWidth - 34);
+    const scale = Math.min(Math.max(avail / vbW, 0.5), 3) * S.zoom;
+    svg.style.width = f1(vbW * scale) + 'px';
+    svg.style.height = f1(vbH * scale) + 'px';
+    svg.innerHTML = DEFS + labels + body + moves;
+  }
+
+  // ---------- step playback ----------
+  const TAGS = {
+    start: ['Start', 'info'], read: ['Read', 'visit'], write: ['Write', 'found'], log: ['Log', 'info'], force: ['Log force', 'ok'],
+    diskw: ['Disk write', 'ok'], evict: ['Evict', 'ok'], commit: ['Commit', 'ok'], restore: ['Restore', 'found'], abort: ['Abort', 'found'],
+    refuse: ['Not allowed', 'bad'], crash: ['Crash', 'bad'], wrong: ['Inconsistent', 'bad'], fine: ['Consistent', 'ok'],
+    ckpt: ['Checkpoint', 'split'], scan: ['Scan', 'visit'], skip: ['Skip', 'info'], undo: ['Undo', 'undo'], redo: ['Redo', 'redo'],
+    stop: ['Stop', 'split'], done: ['Recovered', 'ok'], info: ['Info', 'info']
+  };
+  const tagHtml = kind => `<span class="tag t-${TAGS[kind][1]}">${TAGS[kind][0]}</span>`;
+
+  function renderLog() {
+    rebuildView();
+    $('log').innerHTML = view.map((s, i) =>
+      `<li data-i="${i}" tabindex="0"${i && s.a !== view[i - 1].a ? ' class="act"' : ''}><span class="n">${i + 1}</span>${tagHtml(s.kind)}<span>${s.msg}</span></li>`).join('');
+  }
+
+  function showStep(i, animate = true) {
+    i = Math.max(0, Math.min(view.length - 1, i));
+    cur = i;
+    syncView(false);
+    const st = view[i], from = shownStep;
+    cancelAnimationFrame(rafId);
+    updateChrome(st);
+    shownStep = st;
+    const dur = (!animate || !from || from === st || reduceMotion.matches) ? 0 : Math.min(500, S.speed * 0.6);
+    if (!dur) { render(st, null, 1); return; }
+    const t0 = performance.now();
+    const tick = now => {
+      const t = Math.min(1, (now - t0) / dur);
+      const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      render(st, from, e);
+      if (t < 1) rafId = requestAnimationFrame(tick);
+    };
+    render(st, from, 0);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function redraw() { if (view.length) render(view[cur], null, 1); }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (!playing) return;
+    if (cur >= view.length - 1) { playing = false; updatePlayBtn(); return; }
+    timer = setTimeout(() => { showStep(cur + 1); schedule(); }, S.speed);
+  }
+  function stopPlay() { playing = false; clearTimeout(timer); updatePlayBtn(); }
+  function togglePlay() {
+    if (playing) { stopPlay(); return; }
+    if (cur >= view.length - 1) showStep(0);
+    playing = true; updatePlayBtn(); schedule();
+  }
+  function go(i) { stopPlay(); showStep(i); }
+
+  function updatePlayBtn() {
+    const b = $('playBtn');
+    b.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    b.innerHTML = playing
+      ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg>';
+    b.disabled = view.length < 2;
+  }
+
+  function textbookLog(log, flushed, mode) {
+    const parts = [];
+    for (let i = 0; i < log.length; i++) {
+      const e = log[i], nx = log[i + 1];
+      if (i === flushed) parts.push('‖ buffer:');
+      if (mode === 'ur' && e.type === 'undo' && nx && nx.type === 'redo' && nx.t === e.t && nx.b === e.b && i + 1 !== flushed) {
+        parts.push(`⟨${e.t}, ${e.b}, ${vn(e.b, e.val.v)}, ${vn(e.b, nx.val.v)}⟩`); i++; continue;
+      }
+      parts.push(entText(e));
+    }
+    return parts.join(' ');
+  }
+
+  function updateChrome(st) {
+    $('caption').innerHTML = tagHtml(st.kind) + st.msg;
+    $('counter').textContent = `Step ${cur + 1} of ${view.length}`;
+    $('firstBtn').disabled = $('prevBtn').disabled = cur === 0;
+    $('nextBtn').disabled = $('lastBtn').disabled = cur >= view.length - 1;
+    updatePlayBtn();
+
+    const log = $('log');
+    log.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
+    const li = log.children[cur];
+    if (li) {
+      li.classList.add('active');
+      const box = $('logBox');
+      if (li.offsetTop < box.scrollTop || li.offsetTop + li.offsetHeight > box.scrollTop + box.clientHeight)
+        box.scrollTop = li.offsetTop - box.clientHeight / 2;
+    }
+
+    const s = st.snap;
+    $('stActive').textContent = Object.values(s.status).filter(x => x === 'active').length;
+    $('stDirty').textContent = s.names.filter(b => s.mem[b] && s.mem[b].v !== s.disk[b].v).length;
+    $('stWrites').textContent = s.stats.diskWrites;
+    $('stStable').textContent = s.mode === 'naive' ? '–' : s.flushed;
+    $('stTail').textContent = s.mode === 'naive' ? '–' : s.log.length - s.flushed;
+    $('stForces').textContent = s.mode === 'naive' ? '–' : s.stats.logForces;
+    const r = s.lastRec;
+    $('stRec').hidden = !r;
+    $('stRec').textContent = r && `Last recovery: read ${pl(r.reads, 'log entry', 'log entries')}, undid ${r.undone}, redid ${r.redone}, wrote ${pl(r.writes, 'block')}.`;
+
+    $('truthDump').textContent = s.names.map(b => vn(b, s.truth[b].v)).join(' · ');
+    const NAMES = { active: 'active', committed: 'committed', aborted: 'aborted', lost: 'died in the crash' };
+    $('txDump').textContent = s.txs.length ? s.txs.map(x => `${x.t} ${NAMES[x.status]} (${x.blocks.length ? 'wrote ' + x.blocks.join(', ') : 'no writes'})`).join(' · ') : '(none since the last restart)';
+    $('logDump').textContent = s.mode === 'naive' ? '(no log)' : s.log.length ? textbookLog(s.log, s.flushed, s.mode) : '(empty)';
+  }
+
+  const RULES = {
+    naive: 'No log. Writes change blocks in memory. Any block may be evicted to disk at any time, even one holding uncommitted data (<b>steal</b>). ' +
+      'With <b>force</b> ticked, commit writes the transaction\'s blocks to disk. After a crash nothing can tell right values from wrong ones.',
+    undo: 'Undo logging writes <b>⟨T, X, old⟩</b> for each update. <b>U1</b> (write-ahead): the log entry reaches disk before block X does. ' +
+      '<b>U2</b>: all of T\'s blocks reach disk before <b>⟨COMMIT T⟩</b> (force). Steal is allowed. Recovery reads backward and undoes transactions with no COMMIT or ABORT.',
+    redo: 'Redo logging writes <b>⟨T, X, new⟩</b> for each update. <b>R1</b>: every log entry of T, including <b>⟨COMMIT T⟩</b>, reaches disk before any of T\'s blocks (no steal). ' +
+      'Commit does not write blocks (no force). Recovery reads forward and redoes committed transactions.',
+    ur: 'Undo/redo logging writes <b>⟨T, X, old, new⟩</b>, drawn here as an undo entry and a redo entry side by side. <b>UR1</b> (write-ahead): the log entry reaches disk before block X does. ' +
+      'Steal and no force are both allowed. Recovery redoes committed transactions forward, then undoes incomplete ones backward.'
+  };
+  const CKHELP = {
+    undo: 'Checkpoint: no new transactions; once the active ones finish, write ⟨CKPT⟩. Fuzzy: write ⟨START CKPT (active)⟩; ⟨END CKPT⟩ follows once those transactions finish.',
+    redo: 'Checkpoint: no new transactions; once the active ones finish and the dirty blocks are on disk, write ⟨CKPT⟩. Fuzzy checkpoints are not offered with redo logging: without steal they may never finish.',
+    ur: 'Checkpoint: no new transactions; once the active ones finish and the dirty blocks are on disk, write ⟨CKPT⟩. Fuzzy: write ⟨START CKPT (active)⟩; ⟨END CKPT⟩ follows once every block dirty at that moment is on disk.'
+  };
+  const SHORT = { naive: 'Naive', redo: 'Redo', undo: 'Undo', ur: 'Undo/redo' };
+
+  function refreshUI() {
+    const crashed = D.crashed, act = activeTx(), naive = D.mode === 'naive';
+    pickCur();
+    MODES.forEach(m => $('mode-' + m).setAttribute('aria-pressed', String(D.mode === m)));
+    $('forceRow').hidden = !naive;
+    $('forceChk').checked = D.force;
+    $('rules').innerHTML = RULES[D.mode];
+    $('nbSel').value = String(D.names.length);
+
+    $('txList').innerHTML = act.length
+      ? act.map(t => `<button type="button" class="chip" data-t="${t}" aria-pressed="${t === S.cur}" title="Select ${t}">${t}</button>`).join('')
+      : `<span class="hint">${crashed ? 'The system is down.' : 'No active transaction. Start one.'}</span>`;
+    $('writeLabel').textContent = S.cur ? `Write a block as ${S.cur}` : 'Write a block (select a transaction first)';
+    $('writeGrid').innerHTML = D.names.map(b =>
+      `<button type="button" data-b="${b}"${!S.cur || crashed ? ' disabled' : ''} title="${S.cur ? `${S.cur} writes ${b}` : ''}">${b}</button>`).join('');
+    const need = new Set(D.ckpt ? D.ckpt.need : []);
+    $('evictGrid').innerHTML = D.names.map(b => {
+      const cls = [isDirty(b) ? 'dirty' : '', need.has(b) ? 'need' : ''].filter(Boolean).join(' ');
+      return `<button type="button" data-b="${b}"${cls ? ` class="${cls}"` : ''}${crashed || !D.mem[b] ? ' disabled' : ''} title="${D.mem[b] ? `Evict ${b}${isDirty(b) ? ' (dirty)' : ''}` : `${b} is not in memory`}">${b}</button>`;
+    }).join('');
+    $('startBtn').disabled = crashed;
+    $('commitBtn').disabled = $('abortBtn').disabled = $('commitCrashBtn').disabled = !S.cur || crashed;
+    $('forceBtn').disabled = crashed || naive || D.flushed === D.log.length;
+    $('ckptBtn').disabled = crashed || naive || !!D.ckpt;
+    $('fuzzyBtn').disabled = crashed || naive || D.mode === 'redo' || !!D.ckpt;
+    $('fuzzyBtn').title = D.mode === 'redo' ? 'Not offered with redo logging: without steal, a fuzzy checkpoint may never finish' : '';
+
+    const cs = $('ckptStatus');
+    const c = D.ckpt;
+    cs.hidden = !c;
+    cs.classList.toggle('busy', !!c);
+    $('ckptTip').textContent = naive ? 'There is no log in naive mode, so there is nothing to checkpoint.' : CKHELP[D.mode];
+    if (!c) cs.textContent = '';
+    else if (c.kind === 'quiet' && c.phase === 'drain') cs.innerHTML = `Quiescent checkpoint in progress: no new transactions. Waiting for <b>${act.join(', ')}</b> to commit or abort.`;
+    else if (c.kind === 'fuzzy' && D.mode === 'undo') cs.innerHTML = `Fuzzy checkpoint in progress. ⟨END CKPT⟩ follows once <b>${c.list.filter(t => statusOf(D, t) === 'active').join(', ')}</b> finish.`;
+    else cs.innerHTML = `${c.kind === 'quiet' ? 'Quiescent' : 'Fuzzy'} checkpoint in progress. To complete it, evict <b>${c.need.join(', ')}</b> (purple).`;
+    $('ckFlushBtn').hidden = !(c && c.need.length);
+
+    $('crashBtn').disabled = crashed;
+    $('recoverBtn').disabled = !crashed;
+    $('failTip').textContent = naive ? 'With no log, a crash restarts straight away with whatever the disk holds.'
+      : crashed ? 'The system is down. Run recovery, then step through it with → or the step buttons.'
+      : 'After a crash, Run recovery and step through it one log entry at a time.';
+    $('undoBtn').disabled = !history.length;
+    renderCompare();
+  }
+
+  function renderCompare() {
+    const { rows, at: when } = compareModes(script.filter(o => o.a <= Da), D.names.length, D.force);
+    $('cmpTitle').textContent = when ? 'Same actions under each method, up to the last crash before the step on screen' : 'Same actions under each method up to the step on screen, then a crash';
+    $('cmpBody').innerHTML = rows.map(r =>
+      `<tr class="${r.mode === D.mode ? 'cur' : ''}"><th>${SHORT[r.mode]}${r.mode === 'naive' ? (D.force ? ' (force)' : ' (no force)') : ''}</th>` +
+      `<td>${r.refused}</td><td>${r.diskWrites}</td><td>${r.mode === 'naive' ? '–' : r.logForces}</td><td>${r.mode === 'naive' ? '–' : r.logLen}</td>` +
+      `<td class="${r.wrongCrash ? 'bad' : ''}">${r.wrongCrash}</td>` +
+      `<td>${r.rec ? r.rec.reads : '–'}</td><td>${r.rec ? r.rec.undone + ' / ' + r.rec.redone : '–'}</td>` +
+      `<td class="${r.wrongAfter ? 'bad' : 'good'}">${r.wrongAfter}</td></tr>`).join('');
+  }
+
+  // ---------- wiring ----------
+  const nbSel = $('nbSel');
+  for (let n = 4; n <= 12; n++) nbSel.insertAdjacentHTML('beforeend', `<option value="${n}">${n} blocks (A–${LETTERS[n - 1]})</option>`);
+  nbSel.addEventListener('change', () => rebuild(D.mode, +nbSel.value, D.force, `Now ${nbSel.value} blocks.`));
+  MODES.forEach(m => $('mode-' + m).addEventListener('click', () => {
+    if (m !== D.mode) rebuild(m, D.names.length, D.force, `Switched to ${MODE_NAME[m]}.`);
+  }));
+  $('forceChk').addEventListener('change', e => rebuild(D.mode, D.names.length, e.target.checked,
+    e.target.checked ? 'Commit now writes the transaction\'s blocks to disk (force).' : 'Commit no longer writes blocks to disk (no force).'));
+
+  $('startBtn').addEventListener('click', () => run([{ op: 'start', t: 'T' + D.nextTx }]));
+  $('txList').addEventListener('click', e => {
+    const b = e.target.closest('[data-t]');
+    if (b) { S.cur = b.dataset.t; refreshUI(); }
+  });
+  $('writeGrid').addEventListener('click', e => {
+    const b = e.target.closest('[data-b]');
+    if (b && S.cur) run([{ op: 'write', t: S.cur, b: b.dataset.b }]);
+  });
+  $('evictGrid').addEventListener('click', e => {
+    const b = e.target.closest('[data-b]');
+    if (b) run([{ op: 'evict', b: b.dataset.b }]);
+  });
+  $('commitBtn').addEventListener('click', () => S.cur && run([{ op: 'commit', t: S.cur }]));
+  $('abortBtn').addEventListener('click', () => S.cur && run([{ op: 'abort', t: S.cur }]));
+  $('commitCrashBtn').addEventListener('click', () => S.cur && run([{ op: 'commitcrash', t: S.cur }]));
+  $('forceBtn').addEventListener('click', () => run([{ op: 'force' }]));
+  $('ckptBtn').addEventListener('click', () => run([{ op: 'ckpt' }]));
+  $('fuzzyBtn').addEventListener('click', () => run([{ op: 'fuzzy' }]));
+  $('ckFlushBtn').addEventListener('click', () => { if (D.ckpt) run(D.ckpt.need.map(b => ({ op: 'evict', b }))); });
+  $('crashBtn').addEventListener('click', () => run([{ op: 'crash' }]));
+  $('recoverBtn').addEventListener('click', () => run([{ op: 'recover' }]));
+  $('undoBtn').addEventListener('click', undo);
+  $('saveBtn').addEventListener('click', saveRun);
+  $('openBtn').addEventListener('click', () => $('openFile').click());
+  $('openFile').addEventListener('change', e => { openFile(e.target.files[0]); e.target.value = ''; });
+  document.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) { e.preventDefault(); openFile(f); } });
+  $('sampleBtn').addEventListener('click', () => loadScript(SAMPLE, sampleMsg()));
+  $('clearBtn').addEventListener('click', () => loadScript([], 'Empty database: every block holds its initial version on disk (a0 for A, b0 for B, …), and nothing is in memory. Start a transaction to begin.'));
+
+  $('animChk').addEventListener('change', e => { S.animate = e.target.checked; if (!S.animate) stopPlay(); });
+  $('speed').addEventListener('input', e => { S.speed = +e.target.value; $('speedOut').textContent = (S.speed / 1000).toFixed(1) + ' s'; });
+  $('zoom').addEventListener('input', e => { S.zoom = +e.target.value / 100; $('zoomOut').textContent = e.target.value + '%'; redraw(); });
+
+  $('firstBtn').addEventListener('click', () => go(0));
+  $('prevBtn').addEventListener('click', () => go(cur - 1));
+  $('nextBtn').addEventListener('click', () => go(cur + 1));
+  $('lastBtn').addEventListener('click', () => go(view.length - 1));
+  // switch the step granularity, staying on the same moment of the run
+  function setBy(by, show = true) {
+    const d = view[cur] ? view[cur].last : 0;
+    S.by = by;
+    $('byAction').setAttribute('aria-pressed', String(by === 'action'));
+    $('byDetail').setAttribute('aria-pressed', String(by === 'detail'));
+    if (!show) return;
+    stopPlay();
+    renderLog();
+    showStep(viewIdxOf(d), false);
+  }
+  $('byAction').addEventListener('click', () => setBy('action'));
+  $('byDetail').addEventListener('click', () => setBy('detail'));
+  $('playBtn').addEventListener('click', togglePlay);
+
+  $('log').addEventListener('click', e => { const li = e.target.closest('li'); if (li) go(+li.dataset.i); });
+  $('log').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('li'); if (li) { e.preventDefault(); go(+li.dataset.i); } }
+  });
+  $('svg').addEventListener('click', e => {
+    const g = e.target.closest('.cell.m');
+    if (!g || D.crashed) return;
+    if (e.shiftKey) run([{ op: 'evict', b: g.dataset.b }]);
+    else if (S.cur) run([{ op: 'write', t: S.cur, b: g.dataset.b }]);
+  });
+
+  document.addEventListener('keydown', e => {
+    const tg = e.target instanceof Element ? e.target : document.body;
+    if (tg.closest('input, select, textarea')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if (tg.closest('button, li')) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); }
+    else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'm') leftPane.toggle();
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'r') rightPane.toggle();
+  });
+
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(redraw, 80); });
+
+  // side panes: hidden on request; then their screen edge, or focus moving into them, shows them over the page for a while
+  function pane(el, edge, btn, pin, cls, store, labels) {
+    let t = 0;
+    const off = () => document.body.classList.contains(cls);
+    const typing = () => el.contains(document.activeElement) && document.activeElement.matches('select, input[type=text], textarea');
+    function peek(on) {
+      clearTimeout(t);
+      if (on) { el.classList.add('peek'); return; }
+      t = setTimeout(() => { if (!el.matches(':hover') && !typing()) el.classList.remove('peek'); }, 300);
+    }
+    const mark = v => { btn.setAttribute('aria-pressed', String(v)); btn.setAttribute('aria-label', labels[v ? 1 : 0]); };
+    function set(v) {
+      document.body.classList.toggle(cls, v);
+      el.classList.remove('peek');
+      mark(v);
+      try { localStorage.setItem(store, v ? 'off' : 'on'); } catch (e) {}
+      redraw();
+    }
+    btn.addEventListener('click', () => set(!off()));
+    pin.addEventListener('click', () => set(false));
+    edge.addEventListener('mouseenter', () => peek(true));
+    edge.addEventListener('click', () => peek(true));
+    el.addEventListener('mouseenter', () => { if (off()) peek(true); });
+    el.addEventListener('mouseleave', () => peek(false));
+    el.addEventListener('focusin', () => { if (off()) peek(true); });
+    el.addEventListener('focusout', () => peek(false));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && el.classList.contains('peek')) { el.classList.remove('peek'); if (el.contains(document.activeElement)) document.activeElement.blur(); } });
+    try { if (localStorage.getItem(store) === 'off') { document.body.classList.add(cls); mark(true); } } catch (e) {}
+    return { toggle: () => set(!off()) };
+  }
+  const leftPane = pane($('rail'), $('railEdge'), $('railBtn'), $('pinBtn'), 'railoff', 'recovery-rail', ['Hide settings', 'Show settings']);
+  const rightPane = pane($('side'), $('sideEdge'), $('sideBtn'), $('pinSide'), 'sideoff', 'recovery-side', ['Hide the status and display pane', 'Show the status and display pane']);
+
+  // card info tips: hovering or focusing the (i) shows the tip; a click keeps it open until another click, a click elsewhere or Esc
+  let pinnedTip = null;
+  function showTip(b, on) { $(b.getAttribute('aria-controls')).hidden = !on; b.setAttribute('aria-expanded', String(on)); }
+  function unpinTip() { if (pinnedTip) { showTip(pinnedTip, false); pinnedTip = null; } }
+  document.querySelectorAll('.infobtn').forEach(b => {
+    const hover = on => { if (pinnedTip !== b) showTip(b, on); };
+    b.addEventListener('mouseenter', () => hover(true));
+    b.addEventListener('mouseleave', () => hover(false));
+    b.addEventListener('focus', () => hover(true));
+    b.addEventListener('blur', () => hover(false));
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      if (pinnedTip === b) { unpinTip(); return; }
+      unpinTip();
+      pinnedTip = b; showTip(b, true);
+    });
+  });
+  document.addEventListener('click', e => { if (pinnedTip && !e.target.closest('.tip')) unpinTip(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') unpinTip(); });
+
+  // theme toggle
+  const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => {
+    const a = document.documentElement.getAttribute('data-theme');
+    return a ? a === 'dark' : darkMQ.matches;
+  };
+  const syncThemeBtn = () => { $('themeBtn').textContent = isDark() ? 'Light mode' : 'Dark mode'; };
+  try { const saved = localStorage.getItem('recovery-theme'); if (saved) document.documentElement.setAttribute('data-theme', saved); } catch (e) {}
+  $('themeBtn').addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('recovery-theme', next); } catch (e) {}
+    syncThemeBtn();
+  });
+  darkMQ.addEventListener && darkMQ.addEventListener('change', syncThemeBtn);
+  syncThemeBtn();
+
+  // initial sample scenario
+  function sampleMsg() {
+    return 'Sample: T1 wrote A and C and committed. T2 wrote B and E, and B was evicted to disk before T2 finished. ' +
+      'T3 wrote A and F and committed. T2 then wrote G and is still active. Press Crash to see what a crash does now, ' +
+      'or switch the method to replay the same actions with a log.';
+  }
+  loadScript(SAMPLE, sampleMsg());
+  history = [];
+  refreshUI();
+})();
+</script>
+</body>
+</html>

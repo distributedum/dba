@@ -44,6 +44,7 @@ Submitted projects must be fully authored by the students and must not contain m
 | T6 |  | Cost estimation. | [pdf](materials/06-relational.pdf) | B1 16; B3 5; P3 |
 | T7 |  | Optimization. | [pdf](materials/07-relational.pdf) [demo](materials/queryopt.html) | B1 16; B3 2,4 |
 | PL5 | 29/10/26 | Optimization. | [pdf](materials/lab4.pdf) | |
+| T8 | 5/11/26 | Transactional recovery. | [pdf](materials/08-acid.pdf) [demo](materials/recovery.html) |  B4 9-11; B1 17 |
 
 ## Bibliography
 
