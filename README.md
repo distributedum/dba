@@ -46,7 +46,8 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL5 | 29/10/26 | Optimization I. | [pdf](materials/lab4.pdf) | |
 | T8 | 5/11/26 | Transactional recovery. | [pdf](materials/08-acid.pdf) [demo](materials/recovery.html) |  B4 9-11; B1 17 |
 | PL6 | | Optimization I (cont). | | |
-| PL7 | 12/11/26 | Optimization II . | [pdf](materials/lab5.pdf) | |
+| T9 | 12/11/25 | Transactional isolation. | [pdf](materials/09-acid.pdf) | B1 18 |
+| PL7 |  | Optimization II . | [pdf](materials/lab5.pdf) | |
 
 ## Bibliography
 
