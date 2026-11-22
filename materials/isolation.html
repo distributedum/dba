@@ -1,0 +1,2135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Isolation Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: control rail on the left, transaction timelines in the middle, database state and analysis on the right */
+:root {
+  --bg: #ffffff; --panel: #ffffff; --ink: #222222; --muted: #6f6f6f; --line: #e5e5e5;
+  --box: #ececec; --accent: #267cb9; --accent-hover: #006699; --on-accent: #ffffff;
+  --node: #ffffff; --node-stroke: #444444; --slot-empty: #eff1f3; --edge: #9aa0a6; --dot: rgba(0, 0, 0, .08);
+  --visit: #2a66c9; --visit-bg: #e2ebfa;
+  --ok: #1d8048; --ok-bg: #dcf1e3;
+  --bad: #c3362b; --bad-bg: #fbe1de;
+  --found: #a86400; --found-bg: #fcecc9;
+  --split: #7448bd; --split-bg: #ece4f9;
+  --font-display: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+    --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+    --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+    --visit: #7eaaf6; --visit-bg: #1b2943;
+    --ok: #5dca8b; --ok-bg: #163222;
+    --bad: #f27c70; --bad-bg: #3d1c19;
+    --found: #f2b74e; --found-bg: #3a2b0f;
+    --split: #b597f2; --split-bg: #2a2142;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141619; --panel: #1b1e22; --ink: #e6e6e6; --muted: #9b9fa4; --line: #2e3238;
+  --box: #262a2f; --accent: #5aa9e6; --accent-hover: #80bdee; --on-accent: #0a1a27;
+  --node: #20242a; --node-stroke: #b0b5bb; --slot-empty: #181b1f; --edge: #61676e; --dot: rgba(255, 255, 255, .07);
+  --visit: #7eaaf6; --visit-bg: #1b2943;
+  --ok: #5dca8b; --ok-bg: #163222;
+  --bad: #f27c70; --bad-bg: #3d1c19;
+  --found: #f2b74e; --found-bg: #3a2b0f;
+  --split: #b597f2; --split-bg: #2a2142;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap {
+  margin: 0 auto;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { display: flex; align-items: flex-start; gap: 20px; min-width: 0; }
+.brand .logo { margin-top: 4px; }
+.brand .logo { display: block; flex: none; background: #ffffff; border-radius: 4px; line-height: 0; }
+.brand .logo img { width: 96px; height: auto; display: block; }
+.course { margin: 0 0 4px; font-size: 14px; color: var(--muted); }
+.course a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.course a:hover, .course a:focus-visible { color: var(--accent-hover); text-decoration: underline; }
+@media (max-width: 560px) { .brand .logo img { width: 64px; } }
+footer.credit { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }
+footer.credit a { color: var(--accent); text-decoration: none; }
+footer.credit a:hover { text-decoration: underline; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.rules { margin: 6px 0 0; color: var(--muted); max-width: 110ch; min-height: 3em; }
+.rules b { color: var(--ink); font-weight: 600; }
+
+.layout { display: flex; gap: 20px; align-items: flex-start; }
+.layout > #rail { flex: 0 0 310px; }
+.layout > .board { flex: 1 1 0; }
+.layout > #side { flex: 0 0 280px; }
+/* narrower screens: the right pane wraps below, its cards side by side; phones: one column */
+@media (max-width: 1250px) {
+  .layout { flex-wrap: wrap; }
+  .layout > .board { flex-basis: calc(100% - 330px); }
+  body:not(.sideoff) .layout > #side { flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+  body:not(.sideoff) #side > .card { flex: 1 1 260px; }
+}
+@media (max-width: 900px) { .layout { flex-direction: column; flex-wrap: nowrap; align-items: stretch; } .layout > #rail, .layout > #side { flex: none; } }
+
+.controls { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* side panes: the left button in the step bar hides the settings, the right one the status and display pane, giving the
+   timelines the width; then hovering that screen edge (or tabbing into the pane) slides it in over the page until the pointer leaves */
+body.railoff #rail, body.sideoff #side {
+  position: fixed; top: 0; bottom: 0; width: 344px; z-index: 50; overflow-y: auto;
+  padding: 16px 16px 24px; background: var(--bg); box-shadow: 0 0 28px rgba(0, 0, 0, .22);
+  visibility: hidden; transition: transform .18s ease, visibility 0s linear .18s;
+}
+body.railoff #rail { left: 0; border-right: 1px solid var(--line); transform: translateX(-105%); }
+body.sideoff #side { right: 0; border-left: 1px solid var(--line); transform: translateX(105%); }
+body.railoff #rail.peek, body.sideoff #side.peek { transform: none; visibility: visible; transition: transform .18s ease; }
+.railedge { display: none; position: fixed; top: 0; bottom: 0; left: 0; width: 16px; z-index: 49; cursor: e-resize; }
+.railedge.right { left: auto; right: 0; cursor: w-resize; }
+.railedge::after { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 72px; margin-top: -36px; border-radius: 2px; background: var(--edge); opacity: .55; }
+.railedge.right::after { left: auto; right: 4px; }
+.railedge:hover::after { background: var(--accent); opacity: 1; }
+body.railoff #railEdge, body.sideoff #sideEdge { display: block; }
+.railhead { display: none; align-items: center; justify-content: space-between; gap: 8px; }
+.railhead span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.railhead button { padding: 5px 10px; font-size: 13px; }
+body.railoff #rail .railhead, body.sideoff #side .railhead { display: flex; }
+#railBtn[aria-pressed="true"], #sideBtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { body.railoff #rail, body.sideoff #side, body.railoff #rail.peek, body.sideoff #side.peek { transition: none; } }
+
+.card { position: relative; background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+.card h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 6px 0 0; font-weight: 600; }
+/* (i) next to a card title: hovering shows the card's explanation over the card, a click keeps it open */
+.infobtn { width: 19px; height: 19px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  font: 700 12px/1 var(--font-body); text-transform: none; letter-spacing: 0; color: var(--muted); cursor: help; }
+.infobtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.tip { position: absolute; left: 10px; right: 10px; top: 40px; z-index: 20; margin: 0; padding: 10px 12px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .16);
+  font-size: 13.5px; line-height: 1.45; }
+.tip code { font: 500 .95em var(--font-mono); }
+label { font-weight: 500; font-size: 14px; }
+
+input[type=text], textarea { font: 500 16px var(--font-mono); padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+textarea { resize: vertical; line-height: 1.5; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; font: 400 14px var(--font-body); }
+input:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible, #log li:focus-visible, .anl li:focus-visible, #cmp tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btnrow > button { flex: 1 1 auto; }
+button { font: 500 14px var(--font-body); padding: 9px 12px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
+button:disabled { opacity: .4; cursor: default; }
+.btnrow.small button { font-size: 13px; padding: 7px 8px; }
+
+select { font: 14px var(--font-body); padding: 7px 8px; border-radius: 7px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > label { display: flex; justify-content: space-between; gap: 8px; }
+output { font-family: var(--font-mono); color: var(--muted); font-size: 13px; font-weight: 400; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.hint code, .rules code { font: 500 .95em var(--font-mono); color: var(--ink); }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 400; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.msg { margin: 0; font-size: 14px; min-height: 1.5em; color: var(--muted); }
+.msg.err { color: var(--bad); }
+#saveNote { font: 14px/1.4 var(--font-body); }
+
+.levels { display: flex; flex-direction: column; gap: 4px; }
+.levels .grp { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.levels .grp:first-child { margin-top: 0; }
+.levels button { text-align: left; padding: 7px 10px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.levels button small { font: 500 12px var(--font-mono); color: var(--muted); }
+.levels button[aria-checked="true"], .levels button[aria-checked="true"]:hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.levels button[aria-checked="true"] small { color: var(--on-accent); opacity: .85; }
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 7px; font: 600 15px var(--font-mono); background: var(--panel); color: var(--muted); }
+.seg button + button { border-left: 1.5px solid var(--line); }
+.seg button[aria-pressed="true"], .seg button[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+.opfields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opfields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); font-weight: 500; }
+.opgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.opgrid button { padding: 8px 6px; font-size: 13px; }
+
+.board { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.stepbar { position: relative; background: transparent; border: 1px solid var(--box); border-radius: 10px; padding: 12px 54px 12px 14px; display: flex; gap: 10px 16px; align-items: flex-start; flex-wrap: wrap; }
+.stepnav { display: flex; gap: 4px; align-items: center; }
+#railBtn { margin-right: 6px; }
+#sideBtn { position: absolute; top: 12px; right: 14px; padding: 6px 8px; display: grid; place-items: center; }
+#sideBtn svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+.stepnav button { padding: 6px 8px; display: grid; place-items: center; }
+.stepnav svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+#playBtn { padding: 6px 12px; }
+#counter { font: 500 13px var(--font-mono); color: var(--muted); margin-left: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#caption { margin: 0; padding-top: 3px; font-size: 18px; flex: 1 1 380px; min-width: 0; line-height: 1.45; min-height: 3em; }
+
+.sched { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.chip { font: 500 14px var(--font-mono); padding: 1px 8px; border-radius: 6px; border: 1.5px solid var(--line); color: var(--muted); background: transparent; cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+.chip.done { color: var(--ink); border-color: var(--edge); }
+.chip.wait, .chip.queued { color: var(--split); border-color: var(--split); border-style: dashed; background: var(--split-bg); }
+.chip.skip, .chip.fail { text-decoration: line-through; }
+.chip.abort { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+.chip.cur { outline: 2.5px solid var(--found); outline-offset: 1px; }
+
+.stage {
+  background-color: transparent;
+  background-image: radial-gradient(var(--dot) 1.1px, transparent 1.4px);
+  background-size: 22px 22px;
+  border: 1px solid var(--box); border-radius: 10px;
+  min-height: 380px; max-height: 78vh; overflow: auto; display: flex; padding: 12px;
+}
+#svg { margin: 0 auto; display: block; flex: none; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+
+.logbox { position: relative; max-height: 280px; overflow: auto; background: transparent; border: 1px solid var(--box); border-radius: 10px; }
+.loghead { margin: 0; padding: 10px 14px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+#log { list-style: none; margin: 0; padding: 4px 6px 8px; }
+#log li { display: grid; grid-template-columns: 2.2em 8.6em minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; align-items: baseline; font-size: 14px; }
+#log li:hover { background: var(--bg); }
+#log li.active { background: var(--visit-bg); }
+#log .n { font: 12px var(--font-mono); color: var(--muted); text-align: right; }
+#log .tag { justify-self: start; }
+
+.tag { display: inline-block; font: 600 11px/1.6 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; vertical-align: 2px; border: 1px solid currentColor; white-space: nowrap; }
+#caption .tag { margin-right: 6px; }
+.t-visit { color: var(--visit); background: var(--visit-bg); }
+.t-ok { color: var(--ok); background: var(--ok-bg); }
+.t-bad { color: var(--bad); background: var(--bad-bg); }
+.t-split { color: var(--split); background: var(--split-bg); }
+.t-found { color: var(--found); background: var(--found-bg); }
+.t-info { color: var(--muted); background: var(--bg); }
+.kc { font: 600 .95em var(--font-mono); background: var(--found-bg); color: var(--found); padding: 0 5px; border-radius: 4px; }
+.nk { font-family: var(--font-mono); font-size: .95em; white-space: nowrap; }
+.v { font: 600 .95em var(--font-mono); }
+
+.stats dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 8px; margin: 0; }
+.stats dl > div { display: flex; flex-direction: column; }
+.stats dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.stats dd { margin: 0; font: 600 22px var(--font-mono); font-variant-numeric: tabular-nums; }
+.stats dd.yes { color: var(--ok); } .stats dd.no { color: var(--bad); }
+
+table { border-collapse: collapse; width: 100%; }
+.dbt th, .txt th, .out th, #cmp th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; text-align: left; padding: 4px; border-bottom: 1px solid var(--line); }
+.dbt td, .txt td { padding: 5px 4px; border-bottom: 1px solid var(--box); vertical-align: top; font-size: 14px; }
+.dbt td.k, .txt td.k { font: 700 17px var(--font-mono); width: 2.6em; }
+.dbt .val { font: 600 18px var(--font-mono); }
+.who { font-size: 12px; color: var(--muted); margin-left: 4px; white-space: nowrap; }
+.who.st-active { color: var(--found); }
+.who.st-aborted { color: var(--bad); }
+.muted { color: var(--muted); }
+.lk { display: inline-block; font: 600 12px var(--font-mono); border: 1.5px solid var(--edge); border-radius: 5px; padding: 0 5px; margin: 1px 3px 1px 0; white-space: nowrap; }
+.lk.X { border-color: var(--ink); }
+.lk.wt { color: var(--split); border-color: var(--split); border-style: dashed; }
+.chain { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ver { display: inline-flex; align-items: baseline; gap: 4px; font: 600 16px var(--font-mono); padding: 1px 7px; border-radius: 6px; border: 1.5px solid var(--ok); background: var(--ok-bg); }
+.ver i { font: 500 11px var(--font-mono); font-style: normal; color: var(--muted); }
+.ver.st-active { border-color: var(--found); border-style: dashed; background: var(--found-bg); }
+.ver.st-aborted { border-color: var(--bad); background: transparent; text-decoration: line-through; opacity: .6; }
+.ver.init { border-color: var(--edge); background: transparent; }
+.arrow { color: var(--muted); font-size: 13px; }
+.sees { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.sees b { color: var(--ink); font-family: var(--font-mono); }
+.txst { font: 600 12px var(--font-body); text-transform: uppercase; letter-spacing: .05em; }
+.txst.active { color: var(--ink); } .txst.waiting { color: var(--split); } .txst.committed { color: var(--ok); } .txst.aborted { color: var(--bad); } .txst.idle { color: var(--muted); }
+@keyframes flash { from { background: var(--found-bg); } to { background: transparent; } }
+tr.flash td { animation: flash 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { tr.flash td { animation: none; } }
+
+.anl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.anl li { border: 1px solid var(--box); border-left: 4px solid var(--bad); border-radius: 6px; padding: 6px 10px; font-size: 14px; cursor: pointer; }
+.anl li:hover { background: var(--bad-bg); }
+.anl li.sel { background: var(--bad-bg); border-color: var(--bad); }
+.anl li .code { font: 500 12px var(--font-mono); color: var(--muted); }
+.anl li b { color: var(--bad); }
+.anl .none { border-left-color: var(--ok); cursor: default; color: var(--muted); }
+.anl .none:hover { background: transparent; }
+
+#dsg { width: 100%; max-width: 440px; height: auto; display: block; margin: 0 auto; }
+/* dependency graph and serial comparison side by side under the drawing */
+.analysis { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.analysis > .card { flex: 1 1 340px; }
+#dsg .gnode circle { fill: var(--node); stroke: var(--node-stroke); stroke-width: 2; }
+#dsg .gnode text { font: 700 18px var(--font-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+#dsg .gnode .sub { font: 500 11px var(--font-body); fill: var(--muted); }
+#dsg .gnode.committed circle { stroke: var(--ok); fill: var(--ok-bg); }
+#dsg .gnode.waiting circle { stroke: var(--split); fill: var(--split-bg); stroke-dasharray: 5 3; }
+#dsg .gnode.active circle, #dsg .gnode.idle circle { stroke-dasharray: 5 3; }
+#dsg .gnode.aborted { opacity: .4; }
+#dsg .gnode.aborted circle { stroke: var(--bad); }
+#dsg .gedge { stroke: var(--edge); stroke-width: 2; fill: none; }
+#dsg .gedge.cyc { stroke: var(--bad); stroke-width: 3; }
+#dsg .glabel { font: 500 13px var(--font-mono); fill: var(--muted); text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; }
+#dsg .glabel.cyc { fill: var(--bad); }
+#dsg .ah { fill: var(--edge); } #dsg .ah.cyc { fill: var(--bad); }
+.verdict { margin: 0; font-size: 14px; }
+.verdict b.yes { color: var(--ok); } .verdict b.no { color: var(--bad); }
+
+.out td { font: 500 14px var(--font-mono); padding: 4px 6px; border-bottom: 1px solid var(--box); white-space: nowrap; }
+.out th { white-space: nowrap; }
+.out tbody th { text-transform: none; letter-spacing: 0; font: 600 13px var(--font-mono); color: var(--ink); border-bottom: 1px solid var(--box); }
+.out td.diff { color: var(--bad); background: var(--bad-bg); }
+.out th.match { color: var(--ok); }
+.outwrap { overflow-x: auto; }
+
+.cmpcard { gap: 8px; }
+#cmp td { padding: 6px; border-bottom: 1px solid var(--box); font-size: 14px; vertical-align: middle; }
+#cmp td.num { font: 600 15px var(--font-mono); text-align: center; }
+#cmp th.num { text-align: center; }
+#cmp tbody tr { cursor: pointer; }
+#cmp tbody tr:hover td { background: var(--bg); color: var(--accent); }
+#cmp tbody tr.curlv td { background: var(--visit-bg); }
+#cmp tbody tr.curlv td:first-child { box-shadow: inset 4px 0 0 var(--accent); font-weight: 600; }
+#cmp .yes { color: var(--ok); font-weight: 600; } #cmp .no { color: var(--bad); font-weight: 600; }
+#cmp .tag { margin: 1px 4px 1px 0; }
+.cmpwrap { overflow-x: auto; }
+
+/* timeline drawing */
+#svg text { font: 500 15px var(--font-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#svg .tlabel { font-size: 12px; fill: var(--muted); text-anchor: end; }
+#svg .band { fill: var(--found-bg); opacity: .75; }
+#svg .life { stroke: var(--edge); stroke-width: 2.5; }
+#svg .life.idle { stroke-dasharray: 2 5; stroke-width: 1.5; }
+#svg .life.open { stroke-dasharray: 7 5; }
+#svg .life.waiting { stroke: var(--split); stroke-width: 4; stroke-dasharray: 6 4; }
+#svg .hdr rect { fill: var(--node); stroke: var(--node-stroke); stroke-width: 1.5; }
+#svg .hdr .name { font: 700 22px var(--font-mono); }
+#svg .hdr .stt { font: 600 11px var(--font-body); letter-spacing: .08em; fill: var(--muted); }
+#svg .hdr.waiting rect { stroke: var(--split); stroke-width: 3; fill: var(--split-bg); } #svg .hdr.waiting .stt { fill: var(--split); }
+#svg .hdr.committed rect { stroke: var(--ok); stroke-width: 3; fill: var(--ok-bg); } #svg .hdr.committed .stt { fill: var(--ok); }
+#svg .hdr.aborted rect { stroke: var(--bad); stroke-width: 3; fill: var(--bad-bg); } #svg .hdr.aborted .stt { fill: var(--bad); }
+#svg .hdr.idle rect { stroke-dasharray: 4 3; }
+#svg .op { cursor: pointer; }
+#svg .op .box { stroke-width: 1.8; }
+#svg .op.read .box { fill: var(--visit-bg); stroke: var(--visit); }
+#svg .op.write .box { fill: var(--ok-bg); stroke: var(--ok); }
+#svg .op.wait .box { fill: var(--split-bg); stroke: var(--split); stroke-dasharray: 6 4; }
+#svg .op.wait text { fill: var(--split); }
+#svg .op.commit .box { fill: var(--ok); stroke: var(--ok); }
+#svg .op.commit text { fill: var(--bg); font-weight: 700; }
+#svg .op.abort .box { fill: var(--bad); stroke: var(--bad); }
+#svg .op.abort text { fill: var(--bg); font-weight: 700; }
+#svg .op.fail .box { fill: var(--node); stroke: var(--edge); stroke-dasharray: 4 3; }
+#svg .op.fail text { fill: var(--muted); }
+#svg .op.now .box { stroke: var(--found); stroke-width: 3.5; }
+#svg .op.s-bad .box { stroke: var(--bad); stroke-width: 3.5; }
+#svg .op:hover .box { stroke: var(--bad); stroke-dasharray: none; }
+#svg .resm { fill: var(--split); }
+#svg .alink { stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 7 5; fill: none; }
+#svg .bang { fill: var(--bad); }
+#svg .bang + text { fill: var(--bg); font: 700 13px var(--font-body); }
+#svg .emptytl { font: italic 400 15px var(--font-body); fill: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <a class="logo" href="https://distributedum.github.io/dba/" title="Database Administration course page"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaUAAAFICAMAAADH1hHAAAAA0mVYSWZJSSoACAAAAAoAAAEEAAEAAAClAQAAAQEEAAEAAABIAQAAAgEDAAMAAACGAAAAEgEDAAEAAAABAAAAGgEFAAEAAACMAAAAGwEFAAEAAACUAAAAKAEDAAEAAAACAAAAMQECAA8AAACcAAAAMgECABQAAACsAAAAaYcEAAEAAADAAAAAAAAAAAgACAAIAEgAAAABAAAASAAAAAEAAABHSU1QIDMuMC4wLVJDMgAAMjAyNTowMToxOCAyMDo1NDoyMAABAAGgAwABAAAAAQAAAAAAAACGG2U6AAABfmlDQ1BJQ0MgcHJvZmlsZQAAeJx9kTtIA0EURc9uFEWUgKYQsdhCrbTxh2AToxCECCEqJGrhfkwMZDdhN8EmpWAbsPDTGLWwsdbWwlYQBD8g9oKVoo2ElckGEsT4mjncefcx7w7I5YxuOi1BMK28HQuHlHhiRWl7RaKbABNMq7qTm4lGIzStr3skcd6NiFnN+/6sLmPD0UFSgKCes/MgrQOTW/mc4H0goG+qBkjnwLAdT6yA9Ch0zeM3wakqy2JmwF6KzYIcAJRUA2sNrG/aJsjjwIBhWgbIcY8NwUXBZqag194pNuzcsJYXhQ70E2aeBaIoaBRIkyHPCGksFBxihAk18fdV/VEKaGRIo6MwRxYTtepH/MHvbJ3k2Kg3qTMErS+u+zEIbbtQKbnu97HrVk7A9wxXVt2fLcPUJ/hKdW3gCPzbcHFd17Q9uNyB3qecaqtVyQfIySS8n0FXAnpuoWPVy612z+kDLBUhcgMHhzCUAv9ak73bG3P7t6eW3w8ZKnLpf5uDuAAADXppVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+Cjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDQuNC4wLUV4aXYyIj4KIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIgogICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgIHhtbG5zOkdJTVA9Imh0dHA6Ly93d3cuZ2ltcC5vcmcveG1wLyIKICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIgogICB4bXBNTTpEb2N1bWVudElEPSJnaW1wOmRvY2lkOmdpbXA6OTNiMzc4ZTgtN2EzYS00YzFmLWI0ZDEtZWVjYjI1NDk2M2JiIgogICB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjdjM2JmNjgyLTEyOWItNDIxZS04NTg3LThmYjRkOTczMTc2OSIKICAgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ4bXAuZGlkOjk2MjYzYjQyLTU3N2EtNDg4MC1iNGE2LWE0ZTljNjdlNTY2NiIKICAgZGM6Rm9ybWF0PSJpbWFnZS9wbmciCiAgIEdJTVA6QVBJPSIzLjAiCiAgIEdJTVA6UGxhdGZvcm09IkxpbnV4IgogICBHSU1QOlRpbWVTdGFtcD0iMTczNzIzMzY2MjQxMjM1MyIKICAgR0lNUDpWZXJzaW9uPSIzLjAuMC1SQzIiCiAgIHRpZmY6T3JpZW50YXRpb249IjEiCiAgIHhtcDpDcmVhdG9yVG9vbD0iR0lNUCIKICAgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNTowMToxOFQyMDo1NDoyMCswMDowMCIKICAgeG1wOk1vZGlmeURhdGU9IjIwMjU6MDE6MThUMjA6NTQ6MjArMDA6MDAiPgogICA8eG1wTU06SGlzdG9yeT4KICAgIDxyZGY6U2VxPgogICAgIDxyZGY6bGkKICAgICAgc3RFdnQ6YWN0aW9uPSJzYXZlZCIKICAgICAgc3RFdnQ6Y2hhbmdlZD0iLyIKICAgICAgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDoxODM0ODVhMy05ZjdmLTQ0MWQtYjc5ZC1hNjA2NzRjYzQxZjciCiAgICAgIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkdJTVAgMy4wLjAtUkMyIChMaW51eCkiCiAgICAgIHN0RXZ0OndoZW49IjIwMjUtMDEtMThUMjA6NTQ6MjIrMDA6MDAiLz4KICAgIDwvcmRmOlNlcT4KICAgPC94bXBNTTpIaXN0b3J5PgogIDwvcmRmOkRlc2NyaXB0aW9uPgogPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgIAo8P3hwYWNrZXQgZW5kPSJ3Ij8+RU8QCAAAAwBQTFRFAAAAAQEBAgICAwMDBAQEBQUFBgYGBwcHCAgICQkJCgoKCwsLDAwMDQ0NDg4ODw8PEBAQEREREhISExMTFBQUFRUVFhYWFxcXGBgYGRkZGhoaGxsbHBwcHR0dHh4eHx8fICAgISEhIiIiIyMjJCQkJSUlJiYmJycnKCgoKSkpKioqKysrLCwsLS0tLi4uLy8vMDAwMTExMjIyMzMzNDQ0NTU1NjY2Nzc3ODg4OTk5Ojo6Ozs7PDw8PT09Pj4+Pz8/QEBAQUFBQkJCQ0NDRERERUVFRkZGR0dHSEhISUlJSkpKS0tLTExMTU1NTk5OT09PUFBQUVFRUlJSU1NTVFRUVVVVVlZWV1dXWFhYWVlZWlpaW1tbXFxcXV1dXl5eX19fYGBgYWFhYmJiY2NjZGRkZWVlZmZmZ2dnaGhoaWlpampqa2trbGxsbW1tbm5ub29vcHBwcXFxcnJyc3NzdHR0dXV1dnZ2d3d3eHh4eXl5enp6e3t7fHx8fX19fn5+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" alt="Universidade do Minho"></a>
+      <div>
+        <p class="course"><a href="https://distributedum.github.io/dba/">Database Administration</a> · Master in Informatics Engineering</p>
+        <h1>Isolation Workbench</h1>
+        <p class="rules" id="rules"></p>
+      </div>
+    </div>
+    <button id="themeBtn" type="button">Dark mode</button>
+  </header>
+
+  <main class="layout">
+    <aside class="controls" id="rail" aria-label="Settings">
+      <div class="railhead"><span>Settings</span><button id="pinBtn" type="button" title="Keep the settings open (M)">Keep open</button></div>
+
+      <section class="card">
+        <h2>Scenario<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipScen" aria-label="About scenarios">i</button></h2>
+        <p class="tip" id="tipScen" role="tooltip" hidden>Each scenario loads a schedule that shows one anomaly (or a deadlock) under the weaker levels. Switch the level to see which ones prevent it. Undo (Ctrl+Z) takes back the last change of any kind, including a level switch or an opened file.</p>
+        <select id="presetSel" aria-label="Scenario"></select>
+        <p class="hint" id="presetAbout"></p>
+        <div class="btnrow small"><button id="undoBtn" type="button" title="Undo the last change (Ctrl+Z)">Undo the last change</button></div>
+      </section>
+
+      <section class="card">
+        <h2>Add an operation<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipAdd" aria-label="About adding operations">i</button></h2>
+        <p class="tip" id="tipAdd" role="tooltip" hidden>Each button appends one operation of the selected transaction to the schedule and re-runs it. An empty write value adds 10 for T1, 20 for T2, 30 for T3, so you can tell whose update survived. A relative write (+10, −5) uses the value the transaction last read: a read-modify-write done by the application.</p>
+        <div class="seg" id="txSeg" role="group" aria-label="Transaction">
+          <button type="button" data-tx="1" aria-pressed="true">T1</button>
+          <button type="button" data-tx="2" aria-pressed="false">T2</button>
+          <button type="button" data-tx="3" aria-pressed="false">T3</button>
+        </div>
+        <div class="opfields">
+          <label>Row <input id="opKey" type="text" value="x" spellcheck="false" autocomplete="off"></label>
+          <label>Value <input id="opVal" type="text" spellcheck="false" autocomplete="off" placeholder="+10, −5, =7"></label>
+        </div>
+        <div class="opgrid">
+          <button type="button" data-op="r">Read</button>
+          <button type="button" data-op="w">Write</button>
+          <button type="button" data-op="s">Read table</button>
+          <button type="button" data-op="i">Insert</button>
+          <button type="button" data-op="d">Delete</button>
+          <button type="button" data-op="c">Commit</button>
+          <button type="button" data-op="a">Abort</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Schedule<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipSched" aria-label="About the schedule notation">i</button></h2>
+        <p class="tip" id="tipSched" role="tooltip" hidden><code>r1(x)</code> read · <code>w1(x+10)</code> add 10 to the value T1 read · <code>w1(x=5)</code> write 5 · <code>i1(z=50)</code> insert · <code>d1(z)</code> delete · <code>s1</code> read the whole table · <code>c1</code> commit · <code>a1</code> abort. Ctrl+Enter runs. Click an operation in the timeline to remove it.</p>
+        <div class="field">
+          <label for="schedInput">Operations, in the order they are submitted</label>
+          <textarea id="schedInput" rows="3" spellcheck="false" autocomplete="off" placeholder="e.g. r1(x) r2(x) w1(x+10) w2(x+20) c1 c2"></textarea>
+        </div>
+        <div class="field">
+          <label for="initInput">Initial table</label>
+          <input id="initInput" type="text" spellcheck="false" autocomplete="off" placeholder="e.g. x=100 y=50">
+        </div>
+        <div class="btnrow">
+          <button id="runBtn" class="primary" type="button">Run</button>
+          <button id="shuffleBtn" type="button" title="Keep each transaction's operations in order, but interleave them at random">Random interleaving</button>
+        </div>
+        <div class="btnrow small">
+          <button id="popBtn" type="button">Remove last</button>
+          <button id="clearBtn" type="button">Clear</button>
+        </div>
+        <p id="msg" class="msg" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Isolation level<button type="button" class="infobtn" aria-expanded="false" aria-controls="levelHint" aria-label="About the isolation level">i</button></h2>
+        <p class="tip" id="levelHint" role="tooltip" hidden></p>
+        <div class="levels" id="levels" role="radiogroup" aria-label="Isolation level">
+          <p class="grp">No isolation</p>
+          <button type="button" role="radio" data-lv="none">No concurrency control <small>none</small></button>
+          <p class="grp">Lock-based</p>
+          <button type="button" role="radio" data-lv="ru">Read Uncommitted <small>RU</small></button>
+          <button type="button" role="radio" data-lv="rc">Read Committed <small>RC</small></button>
+          <button type="button" role="radio" data-lv="rr">Repeatable Read <small>RR</small></button>
+          <button type="button" role="radio" data-lv="ser">Serializable (2PL) <small>SER</small></button>
+          <p class="grp">Multi-version, PostgreSQL style</p>
+          <button type="button" role="radio" data-lv="pgrc">Read Committed <small>MVCC</small></button>
+          <button type="button" role="radio" data-lv="si">Snapshot Isolation <small>SI</small></button>
+        </div>
+      </section>
+    </aside>
+    <div class="railedge" id="railEdge" title="Settings (M)" aria-hidden="true"></div>
+
+    <section class="board">
+      <div class="stepbar">
+        <div class="stepnav">
+          <button id="railBtn" type="button" aria-controls="rail" aria-pressed="false" aria-label="Hide settings" title="Hide the settings to give the timelines more room (M). Then hover the left edge to see them."><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 4h18v16H3zM10 6v12h9V6z"/></svg></button>
+          <button id="firstBtn" type="button" aria-label="First step" title="First step"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button id="prevBtn" type="button" aria-label="Previous step" title="Previous step (←)"><svg viewBox="0 0 24 24"><path d="M16 5v14L5 12z"/></svg></button>
+          <button id="playBtn" type="button" aria-label="Play" title="Play / pause (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+          <button id="nextBtn" type="button" aria-label="Next step" title="Next step (→)"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <button id="lastBtn" type="button" aria-label="Last step" title="Last step"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          <span id="counter"></span>
+        </div>
+        <p id="caption" aria-live="polite"></p>
+        <button id="sideBtn" type="button" aria-controls="side" aria-pressed="false" aria-label="Hide the status and display pane" title="Hide the status and display pane on the right (R). Then hover the right edge to see it."><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 4h18v16H3zM5 6v12h9V6z"/></svg></button>
+      </div>
+
+      <div class="sched" id="sched"></div>
+
+      <div class="stage" id="stage"><svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Transaction timelines"></svg></div>
+
+      <div class="legend">
+        <span><i style="background:var(--visit-bg);border-color:var(--visit)"></i>Read</span>
+        <span><i style="background:var(--ok-bg);border-color:var(--ok)"></i>Write, insert, delete, commit</span>
+        <span><i style="background:var(--split-bg);border-color:var(--split);border-style:dashed"></i>Waiting for a lock</span>
+        <span><i style="background:var(--bad-bg);border-color:var(--bad)"></i>Anomaly, abort</span>
+        <span><i style="background:var(--found-bg);border-color:var(--found)"></i>Current step / uncommitted data</span>
+      </div>
+
+      <div class="analysis">
+        <section class="card">
+          <h2>Dependency graph<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipDsg" aria-label="About the dependency graph">i</button></h2>
+          <p class="tip" id="tipDsg" role="tooltip" hidden><code>wr</code> read what the other wrote · <code>ww</code> overwrote the other's version · <code>rw</code> read a version the other then replaced. A cycle means no serial order is equivalent. Aborted transactions are left out.</p>
+          <svg id="dsg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Dependency graph between transactions"></svg>
+          <p class="verdict" id="dsgNote"></p>
+        </section>
+        <section class="card">
+          <h2>Compared with serial execution<button type="button" class="infobtn" aria-expanded="false" aria-controls="tipOut" aria-label="About the serial comparison">i</button></h2>
+          <p class="tip" id="tipOut" role="tooltip" hidden>Runs the committed transactions one after another, in every order, and compares the final table and what each transaction read with what actually happened. Red cells differ.</p>
+          <div id="outcome"></div>
+        </section>
+      </div>
+
+      <div class="logbox" id="logBox">
+        <p class="loghead">Steps · click one to jump to it</p>
+        <ol id="log"></ol>
+      </div>
+
+      <section class="card cmpcard">
+        <h2>The same schedule under every level</h2>
+        <div class="cmpwrap"><table id="cmp"></table></div>
+        <p class="hint">Click a row to switch to that level.</p>
+      </section>
+    </section>
+
+    <aside class="controls" id="side" aria-label="Status and display">
+      <div class="railhead"><span>Status and display</span><button id="pinSide" type="button" title="Keep this pane open (R)">Keep open</button></div>
+      <section class="card stats">
+        <h2>Current state</h2>
+        <dl>
+          <div><dt>Waits</dt><dd id="stWaits">0</dd></div>
+          <div><dt>Aborts</dt><dd id="stAborts">0</dd></div>
+          <div><dt>Anomalies</dt><dd id="stAnoms">0</dd></div>
+          <div><dt>Serializable</dt><dd id="stSer">–</dd></div>
+        </dl>
+        <h3>Database</h3>
+        <div id="db"></div>
+        <h3>Transactions</h3>
+        <div id="txt"></div>
+      </section>
+
+      <section class="card">
+        <h2>Anomalies detected</h2>
+        <ul class="anl" id="anoms"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Save and share</h2>
+        <label for="saveNote">Note or question, saved in the file</label>
+        <textarea id="saveNote" rows="2" placeholder="e.g. Why does T2 wait at t4 under RR but not under SI?"></textarea>
+        <div class="btnrow">
+          <button id="saveBtn" type="button">Save to file</button>
+          <button id="openBtn" type="button">Open file…</button>
+        </div>
+        <input type="file" id="openFile" accept=".json,application/json" hidden>
+        <p class="hint">The file holds the schedule, the initial table, the level and the step on screen, so whoever opens it can step back and forth from there. You can also drop a file onto the page.</p>
+        <p id="fileMsg" class="msg" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Display</h2>
+        <label class="check"><input type="checkbox" id="animChk"> Play steps automatically after a change</label>
+        <div class="field">
+          <label for="speed">Time per step <output id="speedOut">1.1 s</output></label>
+          <input type="range" id="speed" min="300" max="3000" step="100" value="1100">
+        </div>
+        <div class="field">
+          <label for="zoom">Zoom <output id="zoomOut">100%</output></label>
+          <input type="range" id="zoom" min="50" max="200" step="10" value="100">
+        </div>
+      </section>
+    </aside>
+    <div class="railedge right" id="sideEdge" title="Status and display (R)" aria-hidden="true"></div>
+  </main>
+
+  <footer class="credit">
+    <span><a href="https://distributedum.github.io/dba/">Database Administration</a> · Universidade do Minho</span>
+    <span>Built with Claude, Anthropic's AI assistant.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- isolation core ----------
+  const LEVELS = {
+    none: { name: 'No concurrency control', short: 'None', cc: 'none',
+      rules: 'Reads and writes go straight to the single copy of each row. There are <b>no locks and no versions</b>; an abort copies the before-images from the undo log back into the table.' },
+    ru: { name: 'Read Uncommitted (locking)', short: 'RU', cc: 'lock', read: 'none',
+      rules: 'Writes take an <b>exclusive (X) row lock held until commit or abort</b>. Reads take <b>no locks</b>, so they can see uncommitted data.' },
+    rc: { name: 'Read Committed (locking)', short: 'RC', cc: 'lock', read: 'short',
+      rules: 'Writes take <b>X locks held until the end</b>. Reads take a <b>shared (S) lock and release it right after the read</b>, so they only see committed data, but the data can change between two reads.' },
+    rr: { name: 'Repeatable Read (locking)', short: 'RR', cc: 'lock', read: 'long',
+      rules: '<b>S locks on rows read and X locks on rows written, both held until the end.</b> A table scan locks only the rows that exist when it runs, so rows inserted later can still appear.' },
+    ser: { name: 'Serializable (locking, strict 2PL)', short: 'SER', cc: 'lock', read: 'long', pred: true,
+      rules: 'As Repeatable Read, plus a table scan takes an <b>S lock on the whole table</b> (a predicate lock), held until the end. Inserts and deletes need an <b>IX lock on the table</b>, which conflicts with it.' },
+    pgrc: { name: 'Read Committed (MVCC, PostgreSQL)', short: 'RC MVCC', cc: 'mvcc', snap: 'stmt',
+      rules: 'Every <b>statement reads from a fresh snapshot</b> of committed data, so readers never wait. A write to a row that another transaction is changing <b>waits for it, then applies the update to the newest committed version</b>.' },
+    si: { name: 'Snapshot Isolation (MVCC, PostgreSQL)', short: 'SI', cc: 'mvcc', snap: 'tx',
+      rules: 'PostgreSQL REPEATABLE READ. <b>All statements read from one snapshot</b>, taken at the transaction\'s first statement. A write to a row that a concurrent transaction changed <b>aborts the writer if that transaction commits</b> (first updater wins).' },
+  };
+  const LEVEL_IDS = ['none', 'ru', 'rc', 'rr', 'ser', 'pgrc', 'si'];
+  const KEY_RE = '[a-z][a-z0-9_]{0,7}';
+  const OPNAMES = { r: 'r', read: 'r', w: 'w', write: 'w', i: 'i', ins: 'i', insert: 'i', d: 'd', del: 'd', delete: 'd', s: 's', scan: 's', c: 'c', commit: 'c', a: 'a', abort: 'a' };
+  const MAX_OPS = 80;
+
+  function parseInit(text) {
+    const out = [];
+    for (const tok of text.split(/[\s,;]+/).filter(Boolean)) {
+      const m = tok.toLowerCase().match(new RegExp(`^(${KEY_RE})=(-?\\d+)$`));
+      if (!m) throw new Error(`"${tok}" is not a row. Write the initial table as key=value pairs, such as x=100 y=50.`);
+      if (out.some(r => r[0] === m[1])) throw new Error(`Row ${m[1]} appears twice in the initial table.`);
+      out.push([m[1], +m[2]]);
+    }
+    return out;
+  }
+
+  function parseSchedule(text) {
+    const ops = [], re = /([A-Za-z]+)(\d+)\s*(?:\(([^()]*)\))?/g;
+    let m, last = 0;
+    const junk = s => {
+      if (/[^\s,;]/.test(s)) throw new Error(`Cannot read "${s.trim()}". Write operations like r1(x), w2(x+10), i1(z=5), d1(z), s1, c1, a2.`);
+    };
+    while ((m = re.exec(text))) {
+      junk(text.slice(last, m.index));
+      last = re.lastIndex;
+      const name = OPNAMES[m[1].toLowerCase()];
+      if (!name) throw new Error(`"${m[0]}": unknown operation "${m[1]}". Use r, w, i, d, s, c or a.`);
+      const tx = +m[2];
+      if (tx < 1 || tx > 3) throw new Error(`"${m[0]}": transactions are numbered 1 to 3.`);
+      const arg = (m[3] || '').trim().toLowerCase();
+      const op = { tx, op: name };
+      if (name === 'r' || name === 'd') {
+        if (!new RegExp(`^${KEY_RE}$`).test(arg)) throw new Error(`"${m[0]}" needs a row name, as in ${name}${tx}(x).`);
+        op.key = arg;
+      } else if (name === 'w') {
+        const a = arg.match(new RegExp(`^(${KEY_RE})\\s*(?:(?:=|,)\\s*(-?\\d+)|([+-])\\s*(\\d+))?$`));
+        if (!a) throw new Error(`"${m[0]}": write as w${tx}(x+10), w${tx}(x-5), w${tx}(x=7) or w${tx}(x).`);
+        op.key = a[1];
+        if (a[2] !== undefined) { op.mode = 'abs'; op.val = +a[2]; }
+        else if (a[3]) { op.mode = 'rel'; op.val = a[3] === '-' ? -a[4] : +a[4]; }
+        else op.mode = 'def';
+      } else if (name === 'i') {
+        const a = arg.match(new RegExp(`^(${KEY_RE})\\s*(?:(?:=|,)\\s*(-?\\d+))?$`));
+        if (!a) throw new Error(`"${m[0]}": insert as i${tx}(z=50) or i${tx}(z).`);
+        op.key = a[1];
+        if (a[2] !== undefined) { op.mode = 'abs'; op.val = +a[2]; } else op.mode = 'def';
+      } else if ((name === 'c' || name === 'a') && arg) {
+        throw new Error(`"${m[0]}": commit and abort take no argument; write ${name}${tx}.`);
+      }
+      ops.push(op);
+    }
+    junk(text.slice(last));
+    if (ops.length > MAX_OPS) throw new Error(`That is ${ops.length} operations. Use at most ${MAX_OPS}.`);
+    ops.forEach((o, i) => { o.idx = i; });
+    return ops;
+  }
+
+  function fmtOp(o, withTx = true) {
+    const n = withTx ? o.tx : '';
+    switch (o.op) {
+      case 'r': return `r${n}(${o.key})`;
+      case 'w': return `w${n}(${o.key}${o.mode === 'abs' ? '=' + o.val : o.mode === 'rel' ? (o.val < 0 ? '-' + -o.val : '+' + o.val) : ''})`;
+      case 'i': return `i${n}(${o.key}${o.mode === 'abs' ? '=' + o.val : ''})`;
+      case 'd': return `d${n}(${o.key})`;
+      case 's': return `s${n}`;
+      case 'c': return `c${n}`;
+      default: return `a${n}`;
+    }
+  }
+  const fmtSchedule = ops => ops.map(o => fmtOp(o)).join(' ');
+  const fmtInit = init => init.map(([k, v]) => `${k}=${v}`).join(' ');
+
+  // mulberry32; the caller keeps g.s, so a saved run continues with the same random choices
+  function rng(seed) {
+    const g = { s: seed >>> 0 };
+    g.next = () => {
+      g.s = (g.s + 0x6D2B79F5) >>> 0;
+      let t = g.s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return g;
+  }
+
+  function randomInterleave(ops, rnd) {
+    const q = {};
+    for (const o of ops) (q[o.tx] || (q[o.tx] = [])).push(o);
+    const out = [];
+    for (;;) {
+      const left = Object.keys(q).filter(k => q[k].length);
+      if (!left.length) break;
+      let pick = rnd() * left.reduce((s, k) => s + q[k].length, 0);
+      let k = left[0];
+      for (const c of left) { pick -= q[c].length; if (pick < 0) { k = c; break; } }
+      out.push(q[k].shift());
+    }
+    return out.map((o, i) => ({ ...o, idx: i }));
+  }
+
+  const TX = id => id === 0 ? 'the initial data' : `<b>T${id}</b>`;
+  const KC = k => `<span class="kc">${k}</span>`;
+  const VB = v => `<span class="v">${v === null || v === undefined ? '∅' : v}</span>`;
+  const OPC = s => `<span class="nk">${s}</span>`;
+  const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const txList = ids => andList(ids.map(TX));
+
+  function simulate(ops, init, lv, record = true) {
+    const L = LEVELS[lv], LOCK = L.cc === 'lock', MV = L.cc === 'mvcc', NONE = L.cc === 'none';
+    const steps = [], rows = [], hist = [], anoms = [], found = new Set(), trace = [];
+    const initMap = new Map(init);
+    const keys = init.map(r => r[0]);
+    for (const o of ops) if (o.key && !keys.includes(o.key)) keys.push(o.key);
+    const txIds = [...new Set(ops.map(o => o.tx))].sort((a, b) => a - b);
+    const V = [], chain = {}, cur = {}, locks = {}, T = {};
+    const opState = ops.map(() => 'todo');
+    const TABLE = '*table';
+    let clock = 0, nWaits = 0, nDeadlocks = 0, waitSeq = 0, scanSeq = 0, curOpi = -1, lastRecRows = 0;
+    for (const id of txIds) T[id] = { id, status: 'idle', snap: null, seen: {}, seenHow: {}, undo: [], wait: null, queue: [], reads: [], why: '', first: 0, end: 0, endRow: null };
+    const st = id => id === 0 ? 'committed' : T[id].status;
+
+    function mkV(key, val, exists, tx, ev) {
+      const v = { vid: V.length, key, val, exists, tx, ev };
+      V.push(v);
+      (chain[key] || (chain[key] = [])).push(v.vid);
+      return v;
+    }
+    for (const k of keys) cur[k] = mkV(k, initMap.has(k) ? initMap.get(k) : null, initMap.has(k), 0, null).vid;
+
+    const H = h => { h.seq = ++clock; hist.push(h); return h; };
+    function addRow(tx, text, cls, opi, extra = {}) {
+      const r = { id: 'r' + (rows.length + 1), t: rows.length + 1, tx, text, cls, opi, ...extra };
+      rows.push(r);
+      return r;
+    }
+    const showV = v => v.exists ? VB(v.val) : 'no row';
+
+    // --- versions and snapshots
+    function takeSnap() { return { at: rows.length + 1, done: txIds.filter(id => T[id].status === 'committed') }; }
+    function visible(id, k, s) {
+      const c = chain[k];
+      for (let i = c.length - 1; i >= 0; i--) {
+        const v = V[c[i]];
+        if (st(v.tx) === 'aborted') continue;
+        if (v.tx === id || v.tx === 0 || s.done.includes(v.tx)) return v;
+      }
+      return V[c[0]];
+    }
+    function latest(k) {
+      const c = chain[k];
+      for (let i = c.length - 1; i >= 0; i--) if (st(V[c[i]].tx) !== 'aborted') return V[c[i]];
+      return V[c[0]];
+    }
+    function latestCommitted(k) {
+      const c = chain[k];
+      for (let i = c.length - 1; i >= 0; i--) if (st(V[c[i]].tx) === 'committed') return V[c[i]];
+      return V[c[0]];
+    }
+    function stmtSnap(t) {
+      if (L.snap === 'stmt') t.snap = takeSnap();
+      return t.snap;
+    }
+    const seesPhrase = s => s.done.length ? `the initial data plus the commits of ${txList(s.done)}` : 'only the initial data';
+    function snapWhere(t) {
+      return L.snap === 'tx' ? `its snapshot (taken at t${t.snap.at})` : `a fresh snapshot for this statement (${seesPhrase(t.snap)})`;
+    }
+    // Newer versions that a snapshot read skipped, explained
+    function hiddenNote(t, v) {
+      const c = chain[v.key], out = [];
+      for (let i = c.indexOf(v.vid) + 1; i < c.length; i++) {
+        const u = V[c[i]];
+        if (st(u.tx) === 'aborted' || u.tx === t.id) continue;
+        const why = st(u.tx) === 'committed' ? 'committed after the snapshot was taken' : 'has not committed';
+        out.push(`${u.exists ? 'the newer version ' + VB(u.val) : 'the deletion'} by ${TX(u.tx)} is invisible to it (${TX(u.tx)} ${why})`);
+      }
+      return out.length ? ` ${out.join('; ').replace(/^t/, 'T')}.` : '';
+    }
+
+    // --- locks
+    const LK = r => locks[r] || (locks[r] = { S: [], X: 0, IX: [] });
+    const lockName = r => r === TABLE ? 'the table' : KC(r);
+    function conflicts(id, r, mode) {
+      const l = LK(r), b = [];
+      const add = x => { if (x && x !== id && !b.includes(x)) b.push(x); };
+      add(l.X);
+      if (mode === 'X') { l.S.forEach(add); l.IX.forEach(add); }
+      else if (mode === 'S') l.IX.forEach(add);
+      else if (mode === 'IX') l.S.forEach(add);
+      return b;
+    }
+    const holds = (id, r, mode) => { const l = LK(r); return l.X === id || (mode !== 'X' && l[mode].includes(id)); };
+    function blockersFor(id, reqs) {
+      const b = [];
+      for (const [r, m] of reqs) if (!holds(id, r, m)) for (const x of conflicts(id, r, m)) if (!b.includes(x)) b.push(x);
+      return b;
+    }
+    function holdersText(id, reqs) {
+      const parts = [];
+      for (const [r, mode] of reqs) {
+        if (holds(id, r, mode)) continue;
+        const l = LK(r), by = { X: [], S: [], IX: [] };
+        if (l.X && l.X !== id) by.X.push(l.X);
+        if (mode === 'X' || mode === 'IX') l.S.forEach(x => x !== id && by.S.push(x));
+        if (mode === 'X' || mode === 'S') l.IX.forEach(x => x !== id && by.IX.push(x));
+        for (const m of ['X', 'S', 'IX']) if (by[m].length)
+          parts.push(`${txList(by[m])} ${by[m].length > 1 ? 'hold' : 'holds'} ${by[m].length > 1 ? m + ' locks' : (m === 'IX' ? 'an' : m === 'X' ? 'an' : 'an') + ' ' + m + ' lock'} on ${lockName(r)}`);
+      }
+      return andList(parts);
+    }
+    function grant(id, r, mode) {
+      const l = LK(r);
+      if (mode === 'X') { l.X = id; l.S = l.S.filter(x => x !== id); }
+      else if (!l[mode].includes(id)) l[mode].push(id);
+    }
+    function heldList(id) {
+      const out = [];
+      for (const r of Object.keys(locks)) {
+        const l = locks[r], nm = r === TABLE ? 'table' : r;
+        if (l.X === id) out.push('X ' + nm);
+        if (l.S.includes(id)) out.push('S ' + nm);
+        if (l.IX.includes(id)) out.push('IX ' + nm);
+      }
+      return out;
+    }
+    function releaseAll(id) {
+      const out = heldList(id).map(s => s.replace(/^(\w+) (.*)$/, (m, a, b) => `${a} on ${b === 'table' ? 'the table' : KC(b)}`));
+      for (const r of Object.keys(locks)) {
+        const l = locks[r];
+        if (l.X === id) l.X = 0;
+        l.S = l.S.filter(x => x !== id);
+        l.IX = l.IX.filter(x => x !== id);
+      }
+      return out;
+    }
+    // Take a long lock and describe it
+    function takeX(t, r) {
+      if (holds(t.id, r, 'X')) return `${TX(t.id)} already holds an X lock on ${lockName(r)}. `;
+      const up = LK(r).S.includes(t.id);
+      grant(t.id, r, 'X');
+      return up ? `${TX(t.id)} upgrades its S lock on ${lockName(r)} to an exclusive (X) lock, held until it ends. `
+                : `${TX(t.id)} takes an exclusive (X) lock on ${lockName(r)}, held until it ends. `;
+    }
+    function takeIX(t) {
+      if (!L.pred || holds(t.id, TABLE, 'IX')) return '';
+      grant(t.id, TABLE, 'IX');
+      return `${TX(t.id)} takes an IX lock on the table (it is about to add or remove a row). `;
+    }
+
+    // --- recording
+    function view() {
+      const g = depGraph(false);
+      return {
+        rows: rows.map(r => ({ ...r })),
+        txs: txIds.map(id => {
+          const t = T[id];
+          const sn = t.snap && (L.snap === 'tx' || t.status === 'active') ? { at: t.snap.at, done: t.snap.done.slice() } : null;
+          return { id, status: t.wait ? 'waiting' : t.status, waitOn: t.wait ? t.wait.on.filter(b => T[b].status === 'active') : null, waitOp: t.wait ? fmtOp(t.wait.op) : '',
+            waitRow: t.wait ? t.wait.row : null, why: t.why, first: t.first, end: t.end, snap: sn, held: LOCK ? heldList(id) : [], queued: t.queue.map(o => fmtOp(o)) };
+        }),
+        db: keys.map(k => {
+          const l = LK(k);
+          const d = { key: k, cur: cur[k], versions: chain[k].map(vid => { const v = V[vid]; return { vid, val: v.val, exists: v.exists, tx: v.tx, st: st(v.tx) }; }) };
+          if (LOCK) d.lk = { S: l.S.slice(), X: l.X, waiting: txIds.filter(id => T[id].wait && T[id].wait.res.includes(k)) };
+          if (!MV) d.undo = txIds.filter(id => T[id].status === 'active').flatMap(id => T[id].undo.filter(u => u.key === k).map(u => ({ tx: id, val: V[u.before].exists ? V[u.before].val : null })));
+          if (MV) d.sees = txIds.filter(id => T[id].status === 'active').map(id => ({ tx: id, vid: visible(id, k, L.snap === 'tx' ? T[id].snap : takeSnap()).vid }));
+          return d;
+        }),
+        tlock: LOCK && L.pred ? { S: LK(TABLE).S.slice(), IX: LK(TABLE).IX.slice(), waiting: txIds.filter(id => T[id].wait && T[id].wait.res.includes(TABLE)) } : null,
+        anoms: anoms.map(a => ({ ...a })),
+        graph: g,
+        ops: opState.slice(), nWaits, nAborts: txIds.filter(id => T[id].status === 'aborted').length,
+      };
+    }
+    function rec(kind, msg, o = {}) {
+      if (!record) return;
+      const newRow = rows.length > lastRecRows ? rows[rows.length - 1].id : null;
+      lastRecRows = rows.length;
+      steps.push({ kind, msg, opi: o.opi ?? curOpi, hl: o.hl || {}, hk: o.hk || [], anom: o.anom ?? null, newRow, ...view() });
+    }
+
+    // --- dependency graph (Adya-style: wr, ww, rw edges)
+    function depGraph(final) {
+      const ok = id => final ? st(id) === 'committed' : (st(id) === 'active' || st(id) === 'committed');
+      const E = new Map();
+      const add = (a, b, lab, evs) => {
+        if (a === b || a === 0 || b === 0 || !ok(a) || !ok(b)) return;
+        const key = a + '>' + b;
+        if (!E.has(key)) E.set(key, { a, b, labels: [], evs: [] });
+        const e = E.get(key);
+        if (!e.labels.includes(lab)) e.labels.push(lab);
+        for (const x of evs) if (x && !e.evs.includes(x)) e.evs.push(x);
+      };
+      for (const h of hist) if (h.type === 'r') {
+        const v = V[h.vid];
+        add(v.tx, h.tx, `wr ${h.key}`, [v.ev, h.ev]);
+        const c = chain[h.key];
+        let i = c.indexOf(h.vid) + 1;
+        while (i < c.length && st(V[c[i]].tx) === 'aborted') i++;
+        if (i < c.length) add(h.tx, V[c[i]].tx, `rw ${h.key}`, [h.ev, V[c[i]].ev]);
+      }
+      for (const k of keys) {
+        const c = chain[k].filter(vid => st(V[vid].tx) !== 'aborted');
+        for (let i = 1; i < c.length; i++) add(V[c[i - 1]].tx, V[c[i]].tx, `ww ${k}`, [V[c[i - 1]].ev, V[c[i]].ev]);
+      }
+      const ids = txIds.filter(ok), edges = [...E.values()];
+      const cycle = findGraphCycle(ids, edges);
+      for (const e of edges) e.cyc = !!cycle && cycle.some((x, i) => x === e.a && cycle[(i + 1) % cycle.length] === e.b);
+      const nodes = txIds.filter(id => !final || ok(id)).map(id => ({ id, st: T[id].wait ? 'waiting' : st(id) }));
+      return { nodes, edges, cycle, order: cycle ? null : topoOrder(ids, edges) };
+    }
+    function findGraphCycle(ids, edges) {
+      const adj = new Map(ids.map(id => [id, []]));
+      for (const e of edges) if (adj.has(e.a) && adj.has(e.b)) adj.get(e.a).push(e.b);
+      const color = new Map(), stack = [];
+      let res = null;
+      const dfs = u => {
+        color.set(u, 1); stack.push(u);
+        for (const v of adj.get(u)) {
+          if (res) return;
+          if (color.get(v) === 1) { res = stack.slice(stack.indexOf(v)); return; }
+          if (!color.get(v)) dfs(v);
+        }
+        stack.pop(); color.set(u, 2);
+      };
+      for (const id of ids) if (!res && !color.get(id)) dfs(id);
+      return res;
+    }
+    function topoOrder(ids, edges) {
+      const indeg = new Map(ids.map(id => [id, 0])), out = [];
+      for (const e of edges) indeg.set(e.b, indeg.get(e.b) + 1);
+      const left = ids.slice();
+      while (left.length) {
+        const i = left.findIndex(id => indeg.get(id) === 0);
+        const id = left.splice(i < 0 ? 0 : i, 1)[0];
+        out.push(id);
+        for (const e of edges) if (e.a === id) indeg.set(e.b, indeg.get(e.b) - 1);
+      }
+      return out;
+    }
+
+    // --- anomaly detection on the history so far
+    function detect() {
+      const reads = hist.filter(h => h.type === 'r'), writes = hist.filter(h => h.type === 'w');
+      const add = (sig, a) => {
+        if (found.has(sig)) return;
+        found.add(sig);
+        a.id = anoms.length;
+        a.evs = [...new Set(a.evs.filter(Boolean))];
+        anoms.push(a);
+        rec('anomaly', `<b>${a.name}</b> (${a.code}). ${a.msg}`, { hl: Object.fromEntries(a.evs.map(e => [e, 'bad'])), anom: a.id, hk: a.keys });
+      };
+      const later = (vid, pred) => { const c = chain[V[vid].key]; return c.slice(c.indexOf(vid) + 1).map(x => V[x]).find(pred); };
+      // P0 dirty write
+      for (const h of writes) if (h.ptx !== 0 && h.ptx !== h.tx && h.pst === 'active') {
+        const p = V[h.prev];
+        add(`P0:${h.seq}`, { code: 'P0', name: 'Dirty write', txs: [h.ptx, h.tx], keys: [h.key], evs: [p.ev, h.ev],
+          msg: `${TX(h.tx)} overwrote ${KC(h.key)} = ${showV(p)}, which ${TX(h.ptx)} had written but not committed. Neither transaction can now be rolled back safely: restoring a before-image would destroy the other's write.` });
+      }
+      // P1 dirty read, A1 read of aborted data
+      for (const h of reads) {
+        const v = V[h.vid];
+        if (v.tx === 0 || v.tx === h.tx || h.wst !== 'active') continue;
+        add(`P1:${v.tx}:${h.tx}:${h.key}`, { code: 'P1', name: 'Dirty read', txs: [v.tx, h.tx], keys: [h.key], evs: [v.ev, h.ev],
+          msg: `${TX(h.tx)} read ${KC(h.key)} = ${showV(v)}, written by ${TX(v.tx)}, which had not committed.` });
+        if (st(v.tx) === 'aborted') add(`A1:${v.tx}:${h.tx}:${h.key}`, { code: 'A1', name: 'Read of aborted data', txs: [v.tx, h.tx], keys: [h.key], evs: [v.ev, h.ev, T[v.tx].endRow],
+          msg: `${TX(v.tx)} aborted, so the ${showV(v)} that ${TX(h.tx)} read for ${KC(h.key)} never existed in any committed state.` });
+      }
+      // A2 non-repeatable read
+      const groups = new Map();
+      for (const h of reads) { const g = h.tx + ':' + h.key; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(h); }
+      for (const g of groups.values()) for (let i = 1; i < g.length; i++) {
+        const a = g[i - 1], b = g[i], va = V[a.vid], vb = V[b.vid];
+        if (a.vid === b.vid || vb.tx === b.tx) continue;
+        if (a.via === 'scan' && b.via === 'scan' && va.exists !== vb.exists) continue;
+        const by = vb.tx === 0 ? `${TX(va.tx)}'s change was undone in between` : `${TX(vb.tx)} changed it in between`;
+        add(`A2:${b.tx}:${b.key}`, { code: 'A2', name: 'Non-repeatable read', txs: [b.tx, vb.tx || va.tx], keys: [b.key], evs: [a.ev, vb.ev, b.ev],
+          msg: `${TX(b.tx)} read ${KC(b.key)} twice and got different results: ${showV(va)}, then ${showV(vb)} (${by}).` });
+      }
+      // A3 phantom: two scans by the same transaction return different sets of rows
+      const scans = new Map();
+      for (const h of reads) if (h.via === 'scan') {
+        if (!scans.has(h.scanId)) scans.set(h.scanId, { tx: h.tx, id: h.scanId, ev: h.ev, vids: {} });
+        scans.get(h.scanId).vids[h.key] = h.vid;
+      }
+      const byTx = new Map();
+      for (const s of scans.values()) { if (!byTx.has(s.tx)) byTx.set(s.tx, []); byTx.get(s.tx).push(s); }
+      for (const [tx, ss] of byTx) for (let i = 1; i < ss.length; i++) {
+        const a = ss[i - 1], b = ss[i], live = s => Object.keys(s.vids).filter(k => V[s.vids[k]].exists);
+        const la = live(a), lb = live(b);
+        const added = lb.filter(k => !la.includes(k)), removed = la.filter(k => !lb.includes(k));
+        const culprits = [...added, ...removed].map(k => V[b.vids[k]]).filter(v => v.tx !== tx);
+        if (!culprits.length) continue;
+        const who = [...new Set(culprits.map(v => v.tx))].filter(Boolean);
+        const parts = [];
+        if (added.length) parts.push(`${andList(added.map(KC))} appeared`);
+        if (removed.length) parts.push(`${andList(removed.map(KC))} disappeared`);
+        add(`A3:${tx}:${b.id}`, { code: 'A3', name: 'Phantom', txs: [tx, ...who], keys: [...added, ...removed], evs: [a.ev, ...culprits.map(v => v.ev), b.ev],
+          msg: `${TX(tx)} read the whole table twice and got a different set of rows: ${parts.join(' and ')}${who.length ? ` (because of ${txList(who)})` : ''}.` });
+      }
+      // P4 lost update
+      for (const h of writes) {
+        if (st(h.tx) !== 'committed') continue;
+        const prior = reads.filter(r => r.tx === h.tx && r.key === h.key && r.seq < h.seq && r.via !== 'write');
+        if (!prior.length) continue;
+        const ra = prior[prior.length - 1], c = chain[h.key], ia = c.indexOf(ra.vid), iw = c.indexOf(h.vid);
+        for (let i = ia + 1; i < iw; i++) {
+          const u = V[c[i]];
+          if (u.tx === 0 || u.tx === h.tx || st(u.tx) !== 'committed') continue;
+          const vr = V[ra.vid], vw = V[h.vid];
+          add(`P4:${h.key}:${u.tx}:${h.tx}`, { code: 'P4', name: 'Lost update', txs: [u.tx, h.tx], keys: [h.key], evs: [ra.ev, u.ev, h.ev],
+            msg: `${TX(h.tx)} read ${KC(h.key)} = ${showV(vr)}. Then ${TX(u.tx)} wrote ${KC(h.key)} = ${showV(u)} and committed. Then ${TX(h.tx)} wrote ${KC(h.key)} = ${showV(vw)}${h.from === 'seen' ? `, computed from the stale ${showV(vr)}` : ' over it'}. ${TX(u.tx)}'s update is lost.` });
+          break;
+        }
+      }
+      // A5A read skew: saw some of Ti's changes but not others
+      for (const rb of reads) {
+        const vb = V[rb.vid], i = vb.tx;
+        if (i === 0 || i === rb.tx || rb.wst !== 'committed') continue;
+        for (const ra of reads) {
+          if (ra.tx !== rb.tx || ra.key === rb.key || ra.seq > rb.seq) continue;
+          if (reads.some(r => r.tx === ra.tx && r.key === ra.key && r.seq > ra.seq && r.seq < rb.seq)) continue;
+          const u = later(ra.vid, u => u.tx === i);
+          if (!u) continue;
+          add(`A5A:${rb.tx}:${i}`, { code: 'A5A', name: 'Read skew', txs: [rb.tx, i], keys: [ra.key, rb.key], evs: [ra.ev, u.ev, vb.ev, rb.ev],
+            msg: `${TX(rb.tx)} read ${KC(ra.key)} = ${showV(V[ra.vid])} before ${TX(i)} changed it, but read ${KC(rb.key)} = ${showV(vb)} after ${TX(i)} changed it. It saw only part of ${TX(i)}'s work: a state that never existed.` });
+        }
+      }
+      // A5B write skew: each read something the other then wrote, disjoint write sets
+      const committed = txIds.filter(id => st(id) === 'committed');
+      const wset = id => new Set(writes.filter(w => w.tx === id).map(w => w.key));
+      const rwEdge = (x, y) => {
+        for (const r of reads) if (r.tx === x) { const u = later(r.vid, u => u.tx === y); if (u) return { r, u }; }
+        return null;
+      };
+      for (const i of committed) for (const j of committed) if (i < j) {
+        const wi = wset(i), wj = wset(j);
+        if ([...wi].some(k => wj.has(k))) continue;
+        const e1 = rwEdge(i, j), e2 = rwEdge(j, i);
+        if (!e1 || !e2) continue;
+        add(`A5B:${i}:${j}`, { code: 'A5B', name: 'Write skew', txs: [i, j], keys: [e1.r.key, e2.r.key], evs: [e1.r.ev, e2.r.ev, e1.u.ev, e2.u.ev],
+          msg: `${TX(i)} read ${KC(e1.r.key)} and ${TX(j)} read ${KC(e2.r.key)}. Then ${TX(j)} wrote ${KC(e1.r.key)} and ${TX(i)} wrote ${KC(e2.r.key)}, and both committed. Each decided on data the other was changing, so a rule that spans both rows can break.` });
+      }
+      // Any other cycle among committed transactions
+      const g = depGraph(true);
+      if (g.cycle) {
+        const cyc = g.cycle, inCyc = a => a.txs.every(x => cyc.includes(x));
+        if (!anoms.some(a => inCyc(a) && a.code !== 'P1' && a.code !== 'A1')) {
+          const evs = g.edges.filter(e => e.cyc).flatMap(e => e.evs);
+          add('G:' + cyc.slice().sort().join(','), { code: 'G2', name: 'Serialization anomaly', txs: cyc.slice(), keys: [], evs,
+            msg: `The committed transactions depend on each other in a cycle (${cyc.concat(cyc[0]).map(x => 'T' + x).join(' → ')}). No serial order of them gives what they read and wrote, although none of the classic named anomalies describes it.` });
+        }
+      }
+    }
+
+    // --- executing operations
+    function noteRead(t, v, ev, via, scanId) {
+      H({ type: 'r', tx: t.id, key: v.key, vid: v.vid, wst: st(v.tx), ev, via, scanId });
+      t.seen[v.key] = v.exists ? v.val : null;
+      t.seenHow[v.key] = 'read';
+    }
+    function install(t, k, val, exists, ev, from) {
+      const prev = MV ? latest(k) : V[cur[k]];
+      const v = mkV(k, val, exists, t.id, ev);
+      if (!MV) { t.undo.push({ key: k, before: cur[k], mine: v.vid }); cur[k] = v.vid; }
+      H({ type: 'w', tx: t.id, key: k, vid: v.vid, prev: prev.vid, ptx: prev.tx, pst: st(prev.tx), ev, from });
+      t.seen[k] = exists ? val : null;
+      t.seenHow[k] = 'write';
+      return v;
+    }
+    function newValue(t, op, base) {
+      const k = op.key;
+      if (op.mode === 'abs') return { val: op.val, how: '', src: 'const' };
+      const d = op.mode === 'rel' ? op.val : 10 * t.id, sg = d < 0 ? `− ${-d}` : `+ ${d}`;
+      if (t.seen[k] !== undefined && t.seen[k] !== null) {
+        const f = t.seen[k];
+        return { val: f + d, src: 'seen', how: ` (${f} ${sg}, using ${t.seenHow[k] === 'read' ? 'the value it read earlier' : 'its own earlier write'})` };
+      }
+      return { val: base.val + d, src: 'implicit', how: ` (the current ${base.val} ${sg}; it had not read ${k} before)` };
+    }
+    function srcText(t, v) {
+      if (v.tx === 0) return '';
+      if (v.tx === t.id) return ' (its own write)';
+      const s = st(v.tx);
+      if (s === 'committed') return `, written by ${TX(v.tx)} (committed)`;
+      if (s === 'aborted') return `, written by ${TX(v.tx)}, which has aborted`;
+      return `, written by ${TX(v.tx)}, which has not committed: a dirty read`;
+    }
+    function resumeNote(t) {
+      const w = t.wait, done = w.on.filter(b => T[b].status !== 'active');
+      return `${andList(done.map(b => `${TX(b)} has ${T[b].status === 'committed' ? 'committed' : 'aborted'}`))}, so ${TX(t.id)} retries ${OPC(fmtOp(w.op))}. `;
+    }
+    function begin(t) {
+      if (t.status !== 'idle') return '';
+      t.status = 'active';
+      t.first = rows.length + 1;
+      trace.push({ tx: t.id, op: 'b' });
+      if (MV && L.snap === 'tx') {
+        t.snap = takeSnap();
+        return `${TX(t.id)} starts, and its snapshot is taken now: for its whole life it will see ${seesPhrase(t.snap)}. `;
+      }
+      return '';
+    }
+    const done = (t, op) => { t.wait = null; opState[op.idx] = 'done'; };
+
+    function opRead(t, op, pre, resumed) {
+      const k = op.key;
+      if (LOCK && L.read !== 'none') {
+        const b = blockersFor(t.id, [[k, 'S']]);
+        if (b.length) return { on: b, res: [k], why: `needs a shared (S) lock on ${KC(k)}, but ${holdersText(t.id, [[k, 'S']])}.` };
+      }
+      done(t, op);
+      let lt = '';
+      if (NONE) lt = 'No locks are checked. ';
+      else if (LOCK) {
+        if (L.read === 'none') lt = 'Read Uncommitted takes no read locks. ';
+        else if (holds(t.id, k, 'S')) lt = `${TX(t.id)} already holds a lock on ${KC(k)}. `;
+        else if (L.read === 'short') lt = `${TX(t.id)} takes a shared (S) lock on ${KC(k)} for this read only and releases it straight after. `;
+        else { grant(t.id, k, 'S'); lt = `${TX(t.id)} takes a shared (S) lock on ${KC(k)}, held until it ends. `; }
+      }
+      let v, where = '', hid = '';
+      if (MV) { const s = stmtSnap(t); v = visible(t.id, k, s); where = ` from ${snapWhere(t)}`; hid = hiddenNote(t, v); }
+      else v = V[cur[k]];
+      const row = addRow(t.id, `r(${k}) → ${v.exists ? v.val : '∅'}`, 'read', op.idx, { resumed });
+      noteRead(t, v, row.id, 'read');
+      t.reads.push(`${k}=${v.exists ? v.val : '∅'}`);
+      trace.push({ tx: t.id, op: 'r', key: k, val: v.exists ? v.val : null });
+      const body = v.exists ? `${TX(t.id)} reads ${KC(k)} = ${VB(v.val)}${where}${srcText(t, v)}.` : `${TX(t.id)} looks for ${KC(k)}${where}, but there is no such row.`;
+      rec('read', pre + lt + body + hid, { hl: { [row.id]: 'visit' }, hk: [k] });
+      detect();
+    }
+
+    function opScan(t, op, pre, resumed) {
+      let lt = '';
+      if (LOCK && L.read !== 'none') {
+        const reqs = keys.filter(k => V[cur[k]].exists || (LK(k).X && LK(k).X !== t.id)).map(k => [k, 'S']);
+        if (L.pred) reqs.push([TABLE, 'S']);
+        const b = blockersFor(t.id, reqs);
+        if (b.length) return { on: b, res: reqs.map(r => r[0]), why: `needs shared locks on ${L.pred ? 'the table and ' : ''}every row it reads, but ${holdersText(t.id, reqs)}.` };
+      }
+      done(t, op);
+      const vs = MV ? keys.map(k => visible(t.id, k, stmtSnap(t))) : keys.map(k => V[cur[k]]);
+      const live = vs.filter(v => v.exists);
+      if (NONE) lt = 'No locks are checked. ';
+      else if (LOCK) {
+        if (L.read === 'none') lt = 'Read Uncommitted takes no read locks. ';
+        else if (L.read === 'short') lt = `${TX(t.id)} takes an S lock on each row as it reads it and releases it straight away. `;
+        else {
+          for (const v of live) grant(t.id, v.key, 'S');
+          if (L.pred) { grant(t.id, TABLE, 'S'); lt = `${TX(t.id)} takes S locks on the rows it finds and an S lock on the whole table (a predicate lock), all held until it ends. No one can insert or delete rows until then. `; }
+          else lt = `${TX(t.id)} takes S locks on the ${live.length} rows it finds, held until it ends. Rows inserted later are not covered by any lock. `;
+        }
+      }
+      const sum = live.reduce((s, v) => s + v.val, 0);
+      const full = live.length ? live.map(v => `${v.key}=${v.val}`).join(' ') : '∅';
+      let txt = `scan → ${live.length ? live.map(v => v.key).join(',') : '∅'}${live.length > 1 ? ' Σ' + sum : live.length ? '=' + sum : ''}`;
+      const row = addRow(t.id, txt, 'read', op.idx, { resumed, title: `${full}` });
+      const sid = ++scanSeq;
+      for (const v of vs) noteRead(t, v, row.id, 'scan', sid);
+      t.reads.push(`scan{${full}}`);
+      trace.push({ tx: t.id, op: 's', rows: Object.fromEntries(live.map(v => [v.key, v.val])) });
+      const dirty = live.filter(v => v.tx !== 0 && v.tx !== t.id && st(v.tx) === 'active');
+      const where = MV ? ` from ${snapWhere(t)}` : '';
+      let msg = pre + lt + `${TX(t.id)} reads the whole table${where}: ${live.length ? live.map(v => `${KC(v.key)} = ${VB(v.val)}`).join(', ') : 'no rows'}` +
+        (live.length > 1 ? ` (${live.length} rows, sum ${VB(sum)}).` : '.');
+      if (dirty.length) msg += ` Uncommitted data seen: ${andList(dirty.map(v => `${KC(v.key)} by ${TX(v.tx)}`))}.`;
+      if (MV) msg += vs.map(v => hiddenNote(t, v)).join('');
+      rec('scan', msg, { hl: { [row.id]: 'visit' }, hk: live.map(v => v.key) });
+      detect();
+    }
+
+    // Update (w) and delete (d) share the locking and version rules
+    function opModify(t, op, pre, resumed) {
+      const k = op.key, del = op.op === 'd';
+      if (LOCK) {
+        const reqs = del && L.pred ? [[TABLE, 'IX'], [k, 'X']] : [[k, 'X']];
+        const b = blockersFor(t.id, reqs);
+        if (b.length) return { on: b, res: reqs.map(r => r[0]), why: `needs ${reqs.length > 1 ? 'an IX lock on the table and ' : ''}an exclusive (X) lock on ${KC(k)} to ${del ? 'delete' : 'write'} it, but ${holdersText(t.id, reqs)}.` };
+      }
+      if (MV) {
+        const lat = latest(k);
+        if (lat.tx !== t.id && st(lat.tx) === 'active')
+          return { on: [lat.tx], res: [k], why: `wants to ${del ? 'delete' : 'update'} ${KC(k)}, but ${TX(lat.tx)} has an uncommitted ${lat.exists ? 'change to' : 'deletion of'} that row and holds its row lock.` };
+      }
+      done(t, op);
+      let lt = '';
+      if (LOCK) lt = (del ? takeIX(t) : '') + takeX(t, k);
+      let base, note = '';
+      if (MV) {
+        const s = stmtSnap(t), vis = visible(t.id, k, s), lat = latest(k);
+        if (vis !== lat) {
+          opState[op.idx] = 'abort';
+          abortTx(t, 'serial', pre + `${TX(t.id)} wants to ${del ? 'delete' : 'update'} ${KC(k)}, but its newest version (${showV(lat)}) was written by ${TX(lat.tx)}, which committed after ${TX(t.id)}'s snapshot was taken. Under Snapshot Isolation the first updater wins: ${TX(t.id)} fails with “could not serialize access due to concurrent update” and is rolled back.`, op.idx);
+          return;
+        }
+        base = vis;
+        if (resumed && L.snap === 'stmt' && base.tx !== 0 && base.tx !== t.id)
+          note = `PostgreSQL re-reads the row: the newest committed version is ${KC(k)} = ${showV(base)} by ${TX(base.tx)}, and ${TX(t.id)} applies its ${del ? 'delete' : 'update'} to that version. `;
+      } else base = V[cur[k]];
+      if (!base.exists) {
+        opState[op.idx] = 'fail';
+        const row = addRow(t.id, `${del ? 'd' : 'w'}(${k}) ✗ no row`, 'fail', op.idx, { resumed });
+        trace.push({ tx: t.id, op: op.op, key: k, val: null, nop: true });
+        rec('nop', pre + lt + note + `There is no row ${KC(k)}${MV ? ' visible to ' + TX(t.id) : ''}, so the ${del ? 'delete' : 'update'} changes nothing.`, { hl: { [row.id]: 'info' }, hk: [k] });
+        return;
+      }
+      const overDirty = !MV && base.tx !== 0 && base.tx !== t.id && st(base.tx) === 'active';
+      if (del) {
+        const row = addRow(t.id, `d(${k})`, 'write', op.idx, { resumed });
+        install(t, k, null, false, row.id, 'del');
+        trace.push({ tx: t.id, op: 'd', key: k });
+        const how = MV ? `${TX(t.id)} marks the current version of ${KC(k)} as deleted; snapshots that still see it keep reading it.`
+          : `${TX(t.id)} deletes row ${KC(k)}${overDirty ? `, which holds ${TX(base.tx)}'s uncommitted ${showV(base)}: a dirty write` : ''}. The before-image goes to the undo log.`;
+        rec('delete', pre + lt + note + how, { hl: { [row.id]: 'ok' }, hk: [k] });
+        detect();
+        return;
+      }
+      const nv = newValue(t, op, base);
+      const row = addRow(t.id, `w(${k}) ← ${nv.val}`, 'write', op.idx, { resumed });
+      if (nv.src === 'implicit') noteRead(t, base, row.id, 'write');
+      install(t, k, nv.val, true, row.id, nv.src);
+      trace.push({ tx: t.id, op: 'w', key: k, val: nv.val });
+      let how;
+      if (MV) how = `${TX(t.id)} creates a new version ${KC(k)} = ${VB(nv.val)}${nv.how}. The old version ${showV(base)} stays for snapshots that still need it, and ${TX(t.id)} holds the row lock on ${KC(k)} until it ends.`;
+      else how = `${TX(t.id)} writes ${KC(k)} = ${VB(nv.val)}${nv.how}${NONE ? ' straight into the table' : ''}${overDirty ? `, over ${TX(base.tx)}'s uncommitted ${showV(base)}: a dirty write` : ''}. The before-image ${showV(base)} goes to ${TX(t.id)}'s undo log.`;
+      rec('write', pre + lt + note + how, { hl: { [row.id]: 'ok' }, hk: [k] });
+      detect();
+    }
+
+    function opInsert(t, op, pre, resumed) {
+      const k = op.key;
+      if (LOCK) {
+        const reqs = L.pred ? [[TABLE, 'IX'], [k, 'X']] : [[k, 'X']];
+        const b = blockersFor(t.id, reqs);
+        if (b.length) return { on: b, res: reqs.map(r => r[0]), why: `needs ${reqs.length > 1 ? 'an IX lock on the table and ' : ''}an X lock on the new row ${KC(k)}, but ${holdersText(t.id, reqs)}.` };
+      }
+      if (MV) {
+        const lat = latest(k);
+        if (lat.tx !== t.id && st(lat.tx) === 'active')
+          return { on: [lat.tx], res: [k], why: `wants to insert ${KC(k)}, but ${TX(lat.tx)} has an uncommitted change to a row with that key, so the unique index makes ${TX(t.id)} wait to see whether it commits.` };
+      }
+      done(t, op);
+      const lt = LOCK ? takeIX(t) + takeX(t, k) : '';
+      const base = MV ? latest(k) : V[cur[k]];
+      if (MV && L.snap === 'tx' && base !== visible(t.id, k, t.snap)) {
+        opState[op.idx] = 'abort';
+        abortTx(t, 'serial', pre + `${TX(t.id)} wants to insert ${KC(k)}, but ${TX(base.tx)} ${base.exists ? 'inserted' : 'deleted'} that row and committed after ${TX(t.id)}'s snapshot was taken. Under Snapshot Isolation this is a write conflict on the same row: ${TX(t.id)} fails with “could not serialize access” and is rolled back.`, op.idx);
+        return;
+      }
+      if (base.exists) {
+        opState[op.idx] = 'fail';
+        const row = addRow(t.id, `i(${k}) ✗ duplicate`, 'fail', op.idx, { resumed });
+        trace.push({ tx: t.id, op: 'i', key: k, nop: true });
+        rec('dup', pre + lt + `A row ${KC(k)} already exists (${showV(base)}${base.tx ? ', by ' + TX(base.tx) : ''}), so the insert fails with a duplicate-key error. Nothing is written; ${TX(t.id)} carries on.`, { hl: { [row.id]: 'bad' }, hk: [k] });
+        return;
+      }
+      const val = op.mode === 'abs' ? op.val : 10 * t.id;
+      const row = addRow(t.id, `i(${k}) ← ${val}`, 'write', op.idx, { resumed });
+      install(t, k, val, true, row.id, 'ins');
+      trace.push({ tx: t.id, op: 'i', key: k, val });
+      rec('insert', pre + lt + `${TX(t.id)} inserts a new row ${KC(k)} = ${VB(val)}.` + (MV ? ' Until it commits, no other snapshot can see the row.' : ''), { hl: { [row.id]: 'ok' }, hk: [k] });
+      detect();
+    }
+
+    function commitTx(t, op, pre) {
+      done(t, op);
+      t.status = 'committed';
+      const rel = LOCK ? releaseAll(t.id) : [];
+      H({ type: 'c', tx: t.id });
+      const row = addRow(t.id, 'commit', 'commit', op.idx);
+      t.end = row.t; t.endRow = row.id;
+      trace.push({ tx: t.id, op: 'c' });
+      const mine = V.filter(v => v.tx === t.id);
+      let msg = pre + `${TX(t.id)} commits.`;
+      if (LOCK) msg += rel.length ? ` It releases its locks: ${andList(rel)}.` : ' It holds no locks.';
+      else if (MV) msg += mine.length ? ` Its versions (${andList(mine.map(v => `${KC(v.key)} = ${showV(v)}`))}) become visible to snapshots taken from now on.` : '';
+      else msg += mine.length ? ' Its writes were already in the table; now they are final.' : '';
+      const waiters = txIds.filter(id => T[id].wait && T[id].wait.on.includes(t.id));
+      if (waiters.length) msg += ` ${txList(waiters)} ${waiters.length > 1 ? 'were' : 'was'} waiting for it.`;
+      rec('commit', msg, { hl: { [row.id]: 'ok' } });
+      detect();
+      wake();
+    }
+
+    function abortTx(t, reason, intro, opi) {
+      const waitedOp = t.wait ? t.wait.op : null;
+      t.wait = null;
+      let undoMsg = '';
+      if (!MV) {
+        const parts = [];
+        for (let i = t.undo.length - 1; i >= 0; i--) {
+          const u = t.undo[i], now = V[cur[u.key]], before = V[u.before];
+          let s = `${KC(u.key)} to ${before.exists ? VB(before.val) : '“no row”'}`;
+          if (cur[u.key] !== u.mine) s += ` (this wipes out ${TX(now.tx)}'s ${now.exists ? 'value ' + VB(now.val) : 'deletion'}${before.tx && before.tx !== t.id ? `, and brings back ${TX(before.tx)}'s value` : ''})`;
+          cur[u.key] = u.before;
+          parts.push(s);
+        }
+        undoMsg = parts.length ? ` The undo log sets ${andList(parts)}.` : ' It wrote nothing, so there is nothing to undo.';
+      } else {
+        const mine = V.filter(v => v.tx === t.id);
+        undoMsg = mine.length ? ` Its versions (${andList(mine.map(v => `${KC(v.key)} = ${showV(v)}`))}) are discarded; no one will ever see them.` : '';
+      }
+      t.status = 'aborted';
+      t.why = reason;
+      const rel = LOCK ? releaseAll(t.id) : [];
+      H({ type: 'a', tx: t.id });
+      const row = addRow(t.id, reason === 'user' ? 'abort' : reason === 'deadlock' ? 'abort: deadlock' : 'abort: conflict', 'abort', opi);
+      t.end = row.t; t.endRow = row.id;
+      trace.push({ tx: t.id, op: 'a', why: reason });
+      if (waitedOp) opState[waitedOp.idx] = 'abort';
+      for (const q of t.queue) opState[q.idx] = 'skip';
+      const dropped = t.queue.map(o => fmtOp(o));
+      t.queue = [];
+      let msg = intro + undoMsg + (rel.length ? ` It releases ${andList(rel)}.` : '');
+      if (dropped.length) msg += ` Its queued operations (${dropped.map(OPC).join(' ')}) will not run.`;
+      if (reason !== 'user') msg += ' In practice the application would retry it.';
+      rec(reason === 'user' ? 'abort' : reason === 'deadlock' ? 'deadlock' : 'serfail', msg, { hl: { [row.id]: 'bad' }, opi });
+      detect();
+      wake();
+    }
+
+    function findWaitCycle(start) {
+      const seen = new Set();
+      const dfs = (id, path) => {
+        const w = T[id].wait;
+        if (!w) return null;
+        for (const n of w.on) {
+          if (n === start) return path.concat(id);
+          if (seen.has(n)) continue;
+          seen.add(n);
+          const r = dfs(n, path.concat(id));
+          if (r) return r;
+        }
+        return null;
+      };
+      return dfs(start, []);
+    }
+
+    function blockOn(t, op, r, resumed, pre) {
+      const prev = t.wait;
+      t.wait = { op, on: r.on, res: r.res, seq: prev ? prev.seq : ++waitSeq, row: prev ? prev.row : null };
+      opState[op.idx] = 'wait';
+      if (!prev) {
+        nWaits++;
+        const row = addRow(t.id, `${fmtOp(op, false)} waits for ${r.on.map(x => 'T' + x).join(',')}`, 'wait', op.idx);
+        t.wait.row = row.id;
+        rec('wait', pre + `${TX(t.id)} ${r.why} ${TX(t.id)} waits.`, { hl: { [row.id]: 'split' }, hk: op.key ? [op.key] : [] });
+      } else {
+        rec('wait', pre + `But ${TX(t.id)} still ${r.why.replace(/^needs/, 'needs').replace(/^wants/, 'wants')} It keeps waiting.`, { hk: op.key ? [op.key] : [] });
+      }
+      const cyc = findWaitCycle(t.id);
+      if (cyc) {
+        nDeadlocks++;
+        const desc = cyc.map((id, i) => `${TX(id)} waits for ${TX(cyc[(i + 1) % cyc.length])}`);
+        abortTx(t, 'deadlock', `Deadlock: ${andList(desc)}. None of them can ever proceed, so the system aborts ${TX(t.id)}, whose request closed the cycle.`, op.idx);
+      }
+      return 'wait';
+    }
+
+    const OPS = { r: opRead, s: opScan, w: opModify, d: opModify, i: opInsert,
+      c: (t, op, pre) => commitTx(t, op, pre),
+      a: (t, op, pre) => { done(t, op); abortTx(t, 'user', pre + `${TX(t.id)} aborts (rolls back).`, op.idx); } };
+
+    function exec(t, op, resumed) {
+      curOpi = op.idx;
+      const pre = (resumed ? resumeNote(t) : '') + begin(t);
+      const r = OPS[op.op](t, op, pre, resumed);
+      if (r && r.on) return blockOn(t, op, r, resumed, pre);
+      return 'done';
+    }
+    function skipOp(t, op) {
+      curOpi = op.idx;
+      opState[op.idx] = 'skip';
+      rec('skip', t.status === 'aborted'
+        ? `${TX(t.id)} has been aborted, so ${OPC(fmtOp(op))} does not run.`
+        : `${TX(t.id)} has already committed, so ${OPC(fmtOp(op))} is ignored.`);
+    }
+    function drain(t) {
+      while (t.queue.length) {
+        if (t.status === 'active' && !t.wait) exec(t, t.queue.shift(), false);
+        else if (t.status === 'committed' || t.status === 'aborted') skipOp(t, t.queue.shift());
+        else break;
+      }
+    }
+    // A commit or abort unblocks waiters together: retry every waiting operation (oldest wait first), then run what they queued
+    const unblocked = t => t.wait && t.wait.on.some(b => T[b].status !== 'active');
+    function wake() {
+      for (;;) {
+        const c = txIds.map(id => T[id]).filter(unblocked).sort((a, b) => a.wait.seq - b.wait.seq);
+        if (!c.length) return;
+        const go = [];
+        for (const t of c) {
+          if (!unblocked(t)) continue;
+          exec(t, t.wait.op, true);
+          if (!t.wait) go.push(t);
+        }
+        for (const t of go) drain(t);
+      }
+    }
+
+    // --- run the schedule
+    const initTxt = init.length ? init.map(([k, v]) => `${KC(k)} = ${VB(v)}`).join(', ') : 'an empty table';
+    rec('info', ops.length
+      ? `The table starts with ${initTxt}. ${txList(txIds)} run concurrently under <b>${L.name}</b>. Step through to watch what happens.`
+      : `The schedule is empty. Add operations on the left, or pick a scenario.`, { opi: -1 });
+    for (const op of ops) {
+      const t = T[op.tx];
+      curOpi = op.idx;
+      if (t.status === 'committed' || t.status === 'aborted') skipOp(t, op);
+      else if (t.wait || t.queue.length) {
+        t.queue.push(op);
+        opState[op.idx] = 'queued';
+        rec('queue', `${TX(op.tx)} is still waiting${t.wait ? ` for ${txList(t.wait.on)}` : ''}, so it cannot submit ${OPC(fmtOp(op))} yet. The operation runs once ${TX(op.tx)} can continue.`);
+      } else exec(t, op, false);
+    }
+    curOpi = -1;
+    const stuck = txIds.filter(id => T[id].wait);
+    for (const id of stuck)
+      rec('info', `End of the schedule, but ${TX(id)} is still waiting for ${txList(T[id].wait.on)}, which never commits or aborts.`);
+    const committed = txIds.filter(id => T[id].status === 'committed');
+    const aborted = txIds.filter(id => T[id].status === 'aborted').map(id => ({ id, why: T[id].why }));
+    const unfinished = txIds.filter(id => T[id].status === 'active' || T[id].status === 'idle');
+    const g = depGraph(true);
+    const final = {};
+    for (const k of keys) { const v = MV ? latestCommitted(k) : V[cur[k]]; final[k] = v.exists ? v.val : null; }
+    const reads = {};
+    for (const id of txIds) reads[id] = T[id].reads.slice();
+    if (ops.length) {
+      const why = { deadlock: 'deadlock', serial: 'serialization failure', user: 'by the schedule' };
+      let s = `End of the schedule under <b>${L.name}</b>. Committed: ${committed.length ? txList(committed) : 'none'}.`;
+      if (aborted.length) s += ` Aborted: ${andList(aborted.map(a => `${TX(a.id)} (${why[a.why]})`))}.`;
+      if (unfinished.length) s += ` Unfinished: ${txList(unfinished)}.`;
+      s += anoms.length ? ` Anomalies: ${andList([...new Set(anoms.map(a => a.name.toLowerCase()))])}.` : ' No anomalies.';
+      if (committed.length > 1) s += g.cycle
+        ? ` The committed transactions form a dependency cycle (${g.cycle.concat(g.cycle[0]).map(x => 'T' + x).join(' → ')}): the execution is <b>not serializable</b>.`
+        : ` The dependency graph has no cycle: the execution is equivalent to running ${g.order.map(x => 'T' + x).join(' then ')} serially.`;
+      rec('done', s, { opi: -1 });
+    }
+    return {
+      steps, keys, txIds,
+      summary: { committed, aborted, unfinished, waits: nWaits, deadlocks: nDeadlocks, anoms: anoms.map(a => ({ code: a.code, name: a.name, txs: a.txs, keys: a.keys })),
+        cycle: g.cycle, order: g.order, final, reads, trace }
+    };
+  }
+
+  function permutations(a) {
+    if (a.length < 2) return [a.slice()];
+    return a.flatMap((x, i) => permutations(a.slice(0, i).concat(a.slice(i + 1))).map(p => [x, ...p]));
+  }
+  // Run the committed transactions one after another, in every order
+  function serialOutcomes(ops, init, txs) {
+    return permutations(txs).map(order => {
+      const serial = order.flatMap(id => ops.filter(o => o.tx === id && o.op !== 'a')).map((o, i) => ({ ...o, idx: i }));
+      const r = simulate(serial, init, 'none', false), final = {};
+      for (const k of [...init.map(x => x[0]), ...ops.map(o => o.key)]) if (k) final[k] = r.summary.final[k] ?? null;
+      return { order, final, reads: r.summary.reads };
+    });
+  }
+  // ---------- operations ----------
+
+  const PRESETS = [
+    { id: 'dw', name: 'Dirty write', init: 'x=0 y=0', ops: 'w1(x=10) w2(x=20) w2(y=20) c2 w1(y=10) c1',
+      about: 'T1 sets x and y to 10, T2 sets both to 20, so x = y should hold at the end.' },
+    { id: 'dr', name: 'Dirty read', init: 'x=100 y=100', ops: 'r1(x) w1(x-40) r2(x) a1 c2',
+      about: 'T1 takes 40 from x but then aborts. T2 reads x in between.' },
+    { id: 'nr', name: 'Non-repeatable read', init: 'x=100', ops: 'r1(x) w2(x+20) c2 r1(x) c1',
+      about: 'T1 reads x twice. T2 updates x in between.' },
+    { id: 'lu', name: 'Lost update', init: 'x=100', ops: 'r1(x) r2(x) w1(x+10) w2(x+20) c1 c2',
+      about: 'Both read x and add to it: T1 adds 10, T2 adds 20. Run one after the other, x ends at 130.' },
+    { id: 'rs', name: 'Read skew', init: 'x=50 y=50', ops: 'r1(x) r2(x) w2(x-40) r2(y) w2(y+40) c2 r1(y) c1',
+      about: 'T2 moves 40 from x to y, so x + y = 100 in every committed state. T1 reads both rows.' },
+    { id: 'ws', name: 'Write skew', init: 'x=1 y=1', ops: 'r1(x) r1(y) r2(x) r2(y) w1(x=0) w2(y=0) c1 c2',
+      about: 'Two doctors, x and y, are on call (1). Each checks that both are on call, then goes off call (0). The rule: at least one stays on call.' },
+    { id: 'ph', name: 'Phantom', init: 'x=100 y=100', ops: 's1 i2(z=50) c2 s1 c1',
+      about: 'T1 reads the whole table twice. T2 inserts a new row in between.' },
+    { id: 'dl', name: 'Deadlock', init: 'x=100 y=100', ops: 'w1(x-10) w2(y-10) w1(y+10) w2(x+10) c1 c2',
+      about: 'Two transfers in opposite directions update the same two rows in opposite order.' },
+    { id: 'ro', name: 'Read-only anomaly (SI)', init: 'x=0 y=0', ops: 'r2(x) r2(y) r1(y) w1(y+20) c1 r3(x) r3(y) c3 w2(x=-11) c2',
+      about: 'Fekete et al., 2004. x is a checking and y a savings account. T1 deposits 20 into y. T2 withdraws 10 from x and, because its snapshot shows x + y < 10, also charges a 1 overdraft fee. T3 only reads, yet under SI it sees a state that no serial order produces.' },
+  ];
+
+  const SEED = 20261021;
+  const S = { level: 'rc', tx: 1, animate: false, speed: 1100, zoom: 1, seed: SEED };
+  let ops = [], init = [], res = null, outcomes = null;
+  let steps = [], cur = 0, playing = false, timer = 0, rafId = 0, shownRows = null, focusAnom = null;
+  let history = [], prevDb = {};
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  // the run is a pure function of (initial table, schedule, level); the seed only feeds "Random interleaving"
+  function snapshot() { return { text: fmtSchedule(ops), init: fmtInit(init), level: S.level, preset: $('presetSel').value, seed: S.seed, cur, focus: focusAnom }; }
+  function pushHistory() { history.push(snapshot()); if (history.length > 200) history.shift(); }
+
+  // Parse the inputs and run the schedule; `start` is 'end', 'begin', 'diff' (first step that changed) or { at, focus }
+  function runAll(start = 'begin') {
+    stopPlay();
+    let newOps, newInit;
+    try {
+      newOps = parseSchedule($('schedInput').value);
+      newInit = parseInit($('initInput').value);
+    } catch (e) { setMsg(e.message, true); return false; }
+    const old = steps;
+    ops = newOps; init = newInit;
+    $('schedInput').value = fmtSchedule(ops);
+    res = simulate(ops, init, S.level);
+    steps = res.steps;
+    const committed = res.summary.committed;
+    outcomes = committed.length > 1 && !res.summary.unfinished.length ? serialOutcomes(ops, init, committed) : null;
+    setMsg('');
+    renderCompare();
+    renderOutcome();
+    let from = 0;
+    if (start === 'end') from = steps.length - 1;
+    else if (start === 'diff') {
+      while (from < old.length - 1 && from < steps.length - 1 && old[from].msg === steps[from].msg && old[from].kind !== 'done') from++;
+      from = Math.max(0, from - 1);
+    }
+    focusAnom = null;
+    renderLog();
+    shownRows = null;
+    if (typeof start === 'object') {
+      showStep(Math.max(0, Math.min(steps.length - 1, start.at)), false);
+      if (Number.isInteger(start.focus) && start.focus >= 0 && start.focus < steps[cur].anoms.length) { focusAnom = start.focus; redraw(); }
+    } else if (start === 'end' || !S.animate) showStep(start === 'end' ? from : start === 'diff' ? steps.length - 1 : 0);
+    else { showStep(from, false); if (steps.length > 1) { playing = true; updatePlayBtn(); schedule(); } }
+    return true;
+  }
+
+  function setLevel(lv) {
+    if (lv === S.level) return;
+    pushHistory();
+    S.level = lv;
+    updateRules();
+    runAll('begin');
+  }
+
+  function loadPreset(id) {
+    const p = PRESETS.find(x => x.id === id);
+    if (!p) { updatePresetAbout(); return; }
+    pushHistory();
+    $('schedInput').value = p.ops;
+    $('initInput').value = p.init;
+    updatePresetAbout();
+    runAll('begin');
+  }
+
+  function edited(start) {
+    $('presetSel').value = '';
+    updatePresetAbout();
+    return runAll(start);
+  }
+
+  function addOp(code) {
+    const tx = S.tx, key = $('opKey').value.trim().toLowerCase(), raw = $('opVal').value.trim().replace('−', '-');
+    let tok;
+    if (code === 'r' || code === 'd') tok = `${code}${tx}(${key})`;
+    else if (code === 'w') {
+      if (!raw) tok = `w${tx}(${key})`;
+      else if (/^[+-]\d+$/.test(raw)) tok = `w${tx}(${key}${raw})`;
+      else if (/^=?-?\d+$/.test(raw)) tok = `w${tx}(${key}=${raw.replace('=', '')})`;
+      else { setMsg('Write values look like +10, -5 or =7.', true); return; }
+    } else if (code === 'i') {
+      if (!raw) tok = `i${tx}(${key})`;
+      else if (/^[=+]?-?\d+$/.test(raw)) tok = `i${tx}(${key}=${raw.replace(/^[=+]/, '')})`;
+      else { setMsg('Insert values look like 50 or =50.', true); return; }
+    } else tok = `${code}${tx}`;
+    try { parseSchedule(tok); } catch (e) { setMsg(e.message, true); return; }
+    pushHistory();
+    $('schedInput').value = ($('schedInput').value.trim() + ' ' + tok).trim();
+    if (!edited('diff')) history.pop();
+  }
+
+  function removeOp(idx) {
+    if (idx < 0 || idx >= ops.length) return;
+    pushHistory();
+    const removed = fmtOp(ops[idx]);
+    $('schedInput').value = fmtSchedule(ops.filter((o, i) => i !== idx));
+    if (edited('diff')) setMsg(`Removed ${removed} from the schedule.`);
+  }
+
+  function undo() {
+    if (!history.length) return;
+    const s = history.pop();
+    $('schedInput').value = s.text;
+    $('initInput').value = s.init;
+    $('presetSel').value = s.preset;
+    S.level = s.level;
+    S.seed = s.seed;
+    updateRules();
+    updatePresetAbout();
+    runAll({ at: s.cur, focus: s.focus });
+    setMsg('Undone.');
+  }
+
+  function setMsg(text, isErr) { const m = $('msg'); m.textContent = text; m.classList.toggle('err', !!isErr); }
+
+  // ---------- save and open ----------
+  // The file stores the recipe (initial table, schedule, level); opening it re-runs the simulation, so no step text comes from the file
+  const FILE_VERSION = 1;
+  function exportRun() {
+    return { app: 'isolation', version: FILE_VERSION, saved: new Date().toISOString(), note: $('saveNote').value.trim(),
+      seed: S.seed, base: { level: S.level, init: fmtInit(init), preset: $('presetSel').value }, ops: ops.map(o => fmtOp(o)),
+      end: ops.length, steps: steps.length, cur, by: 'step', focus: focusAnom,
+      at: { step: cur + 1, caption: steps[cur].msg.replace(/<[^>]+>/g, '') } };
+  }
+  function saveRun() {
+    const data = exportRun(), p = PRESETS.find(x => x.id === data.base.preset);
+    const name = `isolation-${p ? p.id : 'custom'}-${data.base.level}-step-${data.at.step}.json`;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setFileMsg(`Saved ${name}: ${pl(data.end, 'operation')} under ${LEVELS[data.base.level].name}, opening at step ${data.at.step} of ${data.steps}.`);
+  }
+  // Files are untrusted: everything goes back through the same parsers as typed input, with size caps
+  function importRun(d) {
+    if (!d || typeof d !== 'object' || d.app !== 'isolation' || !Array.isArray(d.ops)) throw new Error('this is not an Isolation Workbench file');
+    if (d.version > FILE_VERSION) throw new Error('it was saved by a newer version of this page');
+    if (d.ops.length > MAX_OPS) throw new Error(`it has more than ${MAX_OPS} operations`);
+    const b = d.base && typeof d.base === 'object' ? d.base : {};
+    const level = LEVEL_IDS.includes(b.level) ? b.level : 'rc';
+    const initText = String(b.init ?? '').slice(0, 400);
+    const text = d.ops.map(o => String(o).slice(0, 40)).join(' ');
+    const newOps = parseSchedule(text), newInit = parseInit(initText);
+    if (newInit.length > 26) throw new Error('its initial table has too many rows');
+    stopPlay(); pushHistory();
+    $('schedInput').value = fmtSchedule(newOps);
+    $('initInput').value = fmtInit(newInit);
+    $('presetSel').value = PRESETS.some(p => p.id === b.preset) ? b.preset : '';
+    $('saveNote').value = typeof d.note === 'string' ? d.note.slice(0, 2000) : '';
+    S.level = level;
+    S.seed = Number.isInteger(d.seed) ? d.seed >>> 0 : SEED;
+    updateRules();
+    updatePresetAbout();
+    runAll({ at: Math.round(Number(d.cur)) || 0, focus: Number.isInteger(d.focus) ? d.focus : null });
+    const exact = d.steps === undefined || d.steps === steps.length;
+    return { step: cur + 1, total: steps.length, note: $('saveNote').value, exact };
+  }
+  function openFile(file) {
+    if (!file) return;
+    if (file.size > 200000) { setFileMsg(`Could not open ${file.name}: it is too large to be a saved run.`, true); return; }
+    file.text().then(txt => {
+      const r = importRun(JSON.parse(txt));
+      setFileMsg(`Opened ${file.name} at step ${r.step} of ${r.total}.${r.note ? ' Its note is shown above.' : ''}${r.exact ? '' : ' Warning: the replay differs from the saved run; it may come from another version of this page.'}`, !r.exact);
+    }).catch(err => setFileMsg(`Could not open ${file.name}: ${err.message}`, true));
+  }
+  function setFileMsg(t, isErr) { const m = $('fileMsg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
+
+  // ---------- layout & drawing ----------
+  const GUT = 46, CW = 250, HDR = 78, RH = 46, BH = 32, BW = 210, PADB = 26;
+  const TYPICAL_ROWS = 8;   // the built-in anomaly scenarios end with 5 to 8 rows (the 3-transaction one with 10)
+  const f1 = v => v.toFixed(1);
+
+  function render(st, t, fresh) {
+    const txs = st.txs, n = txs.length, svg = $('svg');
+    const col = id => GUT + (txs.findIndex(x => x.id === id) + 0.5) * CW;
+    const W = GUT + Math.max(n, 1) * CW + 8;
+    // the canvas is as tall as the run's last step from the start, so the stage does not grow during playback
+    const nRows = Math.max(st.rows.length, steps.length ? steps[steps.length - 1].rows.length : 0, 1);
+    const Hh = HDR + nRows * RH + PADB;
+    const rowY = r => HDR + (r - 1) * RH + RH / 2;
+    const fa = focusAnom !== null ? st.anoms[focusAnom] : (st.anom !== null ? st.anoms[st.anom] : null);
+    const faSet = new Set(fa ? fa.evs : []);
+    let out = '';
+    const nowRow = st.newRow ? st.rows.find(r => r.id === st.newRow) : null;
+    if (nowRow) out += `<rect class="band" x="${GUT - 40}" y="${f1(rowY(nowRow.t) - RH / 2 + 2)}" width="${W - GUT + 36}" height="${RH - 4}" rx="6" opacity="${fresh.has(nowRow.id) ? t.toFixed(3) : 1}"/>`;
+    for (const r of st.rows) out += `<text class="tlabel" x="${GUT - 12}" y="${rowY(r.t)}">t${r.t}</text>`;
+    if (!n) out += `<text class="emptytl" x="${W / 2}" y="${HDR + 10}">No operations yet</text>`;
+
+    // lifelines, with waiting stretches drawn over them
+    const bottom = Hh - PADB / 2;
+    for (const x of txs) {
+      const cx = col(x.id), mine = st.rows.filter(r => r.tx === x.id);
+      if (!mine.length) { out += `<line class="life idle" x1="${cx}" y1="${HDR - 8}" x2="${cx}" y2="${bottom}"/>`; continue; }
+      const y0 = rowY(mine[0].t), ended = x.status === 'committed' || x.status === 'aborted';
+      const y1 = ended ? rowY(x.end) : bottom;
+      out += `<line class="life idle" x1="${cx}" y1="${HDR - 8}" x2="${cx}" y2="${f1(y0)}"/>`;
+      out += `<line class="life" x1="${cx}" y1="${f1(y0)}" x2="${cx}" y2="${f1(ended ? y1 : rowY(mine[mine.length - 1].t))}"/>`;
+      if (!ended) out += `<line class="life open" x1="${cx}" y1="${f1(rowY(mine[mine.length - 1].t))}" x2="${cx}" y2="${f1(bottom)}"/>`;
+      for (const w of mine.filter(r => r.cls === 'wait')) {
+        const after = st.rows.find(r => r.tx === x.id && r.t > w.t);
+        const ye = after ? rowY(after.t) : bottom;
+        out += `<line class="life waiting" x1="${cx}" y1="${f1(rowY(w.t))}" x2="${cx}" y2="${f1(ye)}"/>`;
+      }
+    }
+
+    // headers
+    for (const x of txs) {
+      const cx = col(x.id), label = { idle: 'NOT STARTED', active: 'ACTIVE', waiting: 'WAITING', committed: 'COMMITTED', aborted: 'ABORTED' }[x.status];
+      out += `<g class="hdr ${x.status}"><rect x="${cx - 70}" y="6" width="140" height="56" rx="10"/>` +
+        `<text class="name" x="${cx}" y="27">T${x.id}</text><text class="stt" x="${cx}" y="48">${label}</text></g>`;
+    }
+
+    // links between the operations of the anomaly in focus
+    if (fa) {
+      const pts = st.rows.filter(r => faSet.has(r.id)).map(r => [col(r.tx), rowY(r.t)]);
+      for (let i = 1; i < pts.length; i++)
+        if (pts[i][0] !== pts[i - 1][0]) out += `<path class="alink" d="M${f1(pts[i - 1][0])} ${f1(pts[i - 1][1])} L${f1(pts[i][0])} ${f1(pts[i][1])}"/>`;
+    }
+
+    // operation boxes
+    for (const r of st.rows) {
+      const cx = col(r.tx), y = rowY(r.t), pill = r.cls === 'commit' || (r.cls === 'abort' && r.text === 'abort');
+      const w = pill ? 120 : BW;
+      let text = r.text;
+      if (text.length > 23) text = text.slice(0, 22) + '…';
+      const cls = `op ${r.cls}${faSet.has(r.id) ? ' s-bad' : r.id === st.newRow ? ' now' : ''}`;
+      const op = r.opi >= 0 && ops[r.opi] ? fmtOp(ops[r.opi]) : '';
+      const tip = (r.title ? r.title + ' — ' : '') + (op ? `Click to remove ${op} from the schedule` : '');
+      out += `<g class="${cls}" data-op="${r.opi}" opacity="${fresh.has(r.id) ? t.toFixed(3) : 1}">` +
+        `<title>${esc(tip)}</title>` +
+        `<rect class="box" x="${f1(cx - w / 2)}" y="${f1(y - BH / 2)}" width="${w}" height="${BH}" rx="${pill ? 16 : 6}"/>` +
+        `<text x="${cx}" y="${f1(y)}">${esc(text)}</text></g>`;
+      if (r.resumed) out += `<circle class="resm" cx="${f1(cx - w / 2 - 9)}" cy="${f1(y)}" r="4"><title>Resumed after waiting</title></circle>`;
+      if (faSet.has(r.id)) out += `<circle class="bang" cx="${f1(cx + w / 2 + 12)}" cy="${f1(y)}" r="9"/><text x="${f1(cx + w / 2 + 12)}" y="${f1(y + 1)}">!</text>`;
+    }
+
+    svg.setAttribute('viewBox', `0 0 ${W} ${f1(Hh)}`);
+    const avail = Math.max(240, $('stage').clientWidth - 26);
+    // fill the centre's width, up to 3x, but grow past 1.3x only while a typical schedule still fits the stage's height.
+    // The scale is fixed for the whole run (and the same for every schedule of up to TYPICAL_ROWS rows), so it never shrinks while playing
+    const fit = Math.max(0.5, avail / W), tall = (window.innerHeight * 0.78 - 26) / (HDR + Math.max(nRows, TYPICAL_ROWS) * RH + PADB);
+    const scale = Math.min(fit, Math.max(1.3, Math.min(3, tall))) * S.zoom;
+    svg.style.width = f1(W * scale) + 'px';
+    svg.style.height = f1(Hh * scale) + 'px';
+    svg.innerHTML = out;
+    return { scale, y: nowRow ? rowY(nowRow.t) : null };
+  }
+
+  function keepInView(info) {
+    if (!info || info.y === null) return;
+    const stage = $('stage'), y = info.y * info.scale + 12;
+    if (y < stage.scrollTop + 60 || y > stage.scrollTop + stage.clientHeight - 60) stage.scrollTop = y - stage.clientHeight / 2;
+  }
+
+  function renderGraph(st) {
+    const g = st.graph, svg = $('dsg'), n = g.nodes.length;
+    const W = 340, Hh = n === 3 ? 240 : 150, R = 26;
+    const P = n === 1 ? [[170, 75]] : n === 2 ? [[70, 75], [270, 75]] : [[70, 60], [270, 60], [170, 190]];
+    const pos = new Map(g.nodes.map((x, i) => [x.id, P[i]]));
+    let out = '<defs>' +
+      '<marker id="gah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker>' +
+      '<marker id="gahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="ah cyc" d="M0 0L10 5L0 10z"/></marker></defs>';
+    for (const e of g.edges) {
+      const a = pos.get(e.a), b = pos.get(e.b);
+      if (!a || !b) continue;
+      const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d;
+      const nx = uy, ny = -ux, off = 30;
+      const mx = (a[0] + b[0]) / 2 + nx * off, my = (a[1] + b[1]) / 2 + ny * off;
+      const sx = a[0] + ux * R + nx * 8, sy = a[1] + uy * R + ny * 8, ex = b[0] - ux * (R + 3) + nx * 8, ey = b[1] - uy * (R + 3) + ny * 8;
+      out += `<path class="gedge${e.cyc ? ' cyc' : ''}" marker-end="url(#${e.cyc ? 'gahc' : 'gah'})" d="M${f1(sx)} ${f1(sy)} Q${f1(mx)} ${f1(my)} ${f1(ex)} ${f1(ey)}"/>`;
+      const lx = (sx + 2 * mx + ex) / 4 + nx * 10, ly = (sy + 2 * my + ey) / 4 + ny * 10;
+      out += `<text class="glabel${e.cyc ? ' cyc' : ''}" x="${f1(lx)}" y="${f1(ly)}">${esc(e.labels.join(', '))}</text>`;
+    }
+    for (const x of g.nodes) {
+      const [cx, cy] = pos.get(x.id);
+      out += `<g class="gnode ${x.st}"><circle cx="${cx}" cy="${cy}" r="${R}"/><text x="${cx}" y="${cy}">T${x.id}</text>` +
+        (x.st !== 'committed' ? `<text class="sub" x="${cx}" y="${cy + R + 12}">${x.st === 'idle' ? 'not started' : x.st}</text>` : '') + '</g>';
+    }
+    if (!n) out += `<text class="glabel" x="170" y="75">no transactions</text>`;
+    svg.setAttribute('viewBox', `0 0 ${W} ${Hh}`);
+    svg.innerHTML = out;
+    const live = g.nodes.filter(x => x.st === 'active' || x.st === 'waiting' || x.st === 'committed');
+    const partial = g.nodes.some(x => x.st === 'active' || x.st === 'waiting');
+    let note;
+    if (g.cycle) note = `<b class="no">Cycle ${g.cycle.concat(g.cycle[0]).map(x => 'T' + x).join(' → ')}</b>: ${partial ? 'if these transactions commit, the execution is' : 'the execution is'} not serializable.`;
+    else if (live.length < 2) note = 'Fewer than two transactions to compare.';
+    else note = `<b class="yes">No cycle${partial ? ' so far' : ''}.</b> Equivalent serial order: ${g.order.map(x => 'T' + x).join(' → ')}.`;
+    $('dsgNote').innerHTML = note + (g.nodes.some(x => x.st === 'aborted') ? ' Aborted transactions are left out.' : '');
+  }
+
+  function renderDb(st) {
+    const L = LEVELS[S.level], mv = L.cc === 'mvcc', lock = L.cc === 'lock';
+    const tag = (tx, s) => tx === 0 ? '' : `<span class="who st-${s}">by T${tx}${s === 'active' ? ', uncommitted' : s === 'aborted' ? ', aborted' : ''}</span>`;
+    const hk = new Set(st.hk);
+    let h = '<table class="dbt"><thead><tr><th>Row</th>' + (mv ? '<th>Versions, oldest → newest</th>' : '<th>Value</th><th>Undo log</th>') + (lock ? '<th>Locks</th>' : '') + '</tr></thead><tbody>';
+    const sigs = {};
+    let shown = 0;
+    for (const d of st.db) {
+      const vs = d.versions.filter(v => v.exists || v.tx !== 0);
+      let lockCell = '';
+      if (lock) {
+        if (d.lk.X) lockCell += `<span class="lk X">X T${d.lk.X}</span>`;
+        for (const x of d.lk.S) lockCell += `<span class="lk">S T${x}</span>`;
+        for (const x of d.lk.waiting) lockCell += `<span class="lk wt">T${x} waits</span>`;
+      }
+      let cells;
+      if (mv) {
+        if (!vs.length && !hk.has(d.key)) continue;
+        const chainHtml = vs.length ? vs.map(v => `<span class="ver st-${v.st}${v.tx === 0 ? ' init' : ''}">${v.exists ? v.val : '✝'}<i>T${v.tx}</i></span>`).join('<span class="arrow">→</span>') : '<span class="muted">no row</span>';
+        const sees = d.sees.map(s => { const v = d.versions.find(x => x.vid === s.vid); return `T${s.tx} sees <b>${v.exists ? v.val : 'no row'}</b>`; });
+        cells = `<td><div class="chain">${chainHtml}</div>${sees.length ? `<div class="sees">${sees.join(' · ')}${S.level === 'pgrc' ? ' (next statement)' : ''}</div>` : ''}</td>`;
+      } else {
+        const c = d.versions.find(v => v.vid === d.cur);
+        if (!c.exists && c.tx === 0 && !d.undo.length && !lockCell && !hk.has(d.key)) continue;
+        const val = c.exists ? `<span class="val">${c.val}</span>` : '<span class="muted">no row</span>';
+        const undo = d.undo.length ? d.undo.map(u => `T${u.tx}: ${u.val === null ? 'no row' : u.val}`).join('<br>') : '<span class="muted">–</span>';
+        cells = `<td>${val}${tag(c.tx, c.st)}</td><td class="nk">${undo}</td>`;
+      }
+      const html = `<td class="k">${d.key}</td>${cells}${lock ? `<td>${lockCell || '<span class="muted">–</span>'}</td>` : ''}`;
+      sigs[d.key] = html;
+      const flash = prevDb[d.key] !== undefined && prevDb[d.key] !== html && !reduceMotion.matches;
+      h += `<tr${flash ? ' class="flash"' : ''}>${html}</tr>`;
+      shown++;
+    }
+    if (st.tlock) {
+      let c = '';
+      for (const x of st.tlock.S) c += `<span class="lk">S T${x}</span>`;
+      for (const x of st.tlock.IX) c += `<span class="lk">IX T${x}</span>`;
+      for (const x of st.tlock.waiting) c += `<span class="lk wt">T${x} waits</span>`;
+      h += `<tr><td class="k" title="Table-level (predicate) lock">tbl</td><td colspan="2" class="muted">whole-table lock</td><td>${c || '<span class="muted">–</span>'}</td></tr>`;
+    }
+    if (!shown) h += `<tr><td colspan="4" class="muted">The table is empty.</td></tr>`;
+    h += '</tbody></table>';
+    $('db').innerHTML = h;
+    prevDb = sigs;
+
+    let t = '<table class="txt"><tbody>';
+    for (const x of st.txs) {
+      const det = [];
+      if (x.status === 'waiting') det.push(x.waitOn.length ? `waits for ${x.waitOn.map(i => 'T' + i).join(', ')} to run <span class="nk">${x.waitOp}</span>` : `no longer blocked; retries <span class="nk">${x.waitOp}</span> next`);
+      if (x.queued.length) det.push(`queued: <span class="nk">${x.queued.join(' ')}</span>`);
+      if (lock && x.held.length) det.push(`holds ${x.held.map(s => `<span class="lk${s[0] === 'X' ? ' X' : ''}">${s}</span>`).join('')}`);
+      if (mv && x.snap && (x.status === 'active' || x.status === 'waiting'))
+        det.push(`${S.level === 'pgrc' ? 'last statement\'s snapshot' : 'snapshot'} t${x.snap.at}: sees ${x.snap.done.length ? 'commits of ' + x.snap.done.map(i => 'T' + i).join(', ') : 'initial data only'}`);
+      if (x.status === 'aborted' && x.why !== 'user') det.push(x.why === 'deadlock' ? 'deadlock victim' : 'serialization failure');
+      t += `<tr><td class="k">T${x.id}</td><td><span class="txst ${x.status}">${x.status === 'idle' ? 'not started' : x.status}</span>${det.length ? '<br>' + det.join('<br>') : ''}</td></tr>`;
+    }
+    $('txt').innerHTML = t + '</tbody></table>';
+  }
+
+  function renderAnoms(st) {
+    const fa = focusAnom !== null ? focusAnom : st.anom;
+    $('anoms').innerHTML = st.anoms.length
+      ? st.anoms.map(a => `<li tabindex="0" data-a="${a.id}" class="${a.id === fa ? 'sel' : ''}"><b>${a.name}</b> <span class="code">${a.code} · ${a.txs.map(x => 'T' + x).join(', ')}</span><br>${a.msg}</li>`).join('')
+      : `<li class="none">None so far.</li>`;
+  }
+
+  function renderChips(st) {
+    $('sched').innerHTML = ops.length
+      ? '<span>Submitted:</span>' + ops.map((o, i) => `<button type="button" class="chip ${st.ops[i]}${i === st.opi ? ' cur' : ''}" data-i="${i}" title="${esc(chipTip(st.ops[i]))}">${fmtOp(o)}</button>`).join('')
+      : '';
+  }
+  const chipTip = s => ({ todo: 'Not submitted yet', done: 'Done. Click to jump to it', wait: 'Waiting for a lock', queued: 'Queued behind a waiting operation', skip: 'Did not run', fail: 'Ran with no effect', abort: 'Aborted the transaction' })[s] || '';
+
+  function renderCompare() {
+    const rows = LEVEL_IDS.map(lv => {
+      const r = lv === S.level ? res : simulate(ops, init, lv, false), s = r.summary;
+      const names = [...new Set(s.anoms.map(a => a.name))];
+      const ser = s.committed.length < 2 ? '<span class="muted">–</span>' : s.cycle ? '<span class="no">no</span>' : `<span class="yes">yes</span> <span class="muted nk">${s.order.map(x => 'T' + x).join('→')}</span>`;
+      const ab = s.aborted.filter(a => a.why !== 'user');
+      return `<tr data-lv="${lv}" tabindex="0" class="${lv === S.level ? 'curlv' : ''}"><td>${LEVELS[lv].name}</td>` +
+        `<td class="num">${s.waits}</td><td class="num">${ab.length ? ab.map(a => `T${a.id}`).join(' ') : '–'}</td>` +
+        `<td>${names.length ? names.map(n => `<span class="tag t-bad">${n}</span>`).join('') : '<span class="muted">none</span>'}</td><td>${ser}</td></tr>`;
+    });
+    $('cmp').innerHTML = '<thead><tr><th>Level</th><th class="num">Waits</th><th class="num">Aborted</th><th>Anomalies</th><th>Serializable</th></tr></thead><tbody>' + rows.join('') + '</tbody>';
+  }
+
+  function renderOutcome() {
+    const s = res.summary, el = $('outcome');
+    if (!ops.length) { el.innerHTML = '<p class="hint">No schedule yet.</p>'; return; }
+    if (s.unfinished.length) { el.innerHTML = `<p class="hint">${s.unfinished.map(x => 'T' + x).join(', ')} never finished, so there is no final result to compare.</p>`; return; }
+    if (!outcomes) { el.innerHTML = `<p class="hint">Only ${s.committed.length ? 'T' + s.committed[0] : 'no transaction'} committed, so there is nothing to compare.</p>`; return; }
+    const keys = Object.keys(s.final).filter(k => s.final[k] !== null || outcomes.some(o => o.final[k] !== null));
+    const rd = (reads, id) => reads[id].join(' ') || '–';
+    const match = outcomes.map(o => keys.every(k => o.final[k] === s.final[k]) && s.committed.every(id => rd(o.reads, id) === rd(s.reads, id)));
+    let h = '<div class="outwrap"><table class="out"><thead><tr><th></th><th>Actual</th>' +
+      outcomes.map((o, i) => `<th class="${match[i] ? 'match' : ''}">${o.order.map(x => 'T' + x).join('→')}${match[i] ? ' ✓' : ''}</th>`).join('') + '</tr></thead><tbody>';
+    for (const k of keys) {
+      const a = s.final[k] === null ? '∅' : s.final[k];
+      h += `<tr><th>${k}</th><td>${a}</td>` + outcomes.map(o => { const v = o.final[k] === null ? '∅' : o.final[k]; return `<td class="${String(v) !== String(a) ? 'diff' : ''}">${v}</td>`; }).join('') + '</tr>';
+    }
+    for (const id of s.committed) {
+      const a = rd(s.reads, id);
+      h += `<tr><th>T${id} read</th><td>${esc(a)}</td>` + outcomes.map(o => { const v = rd(o.reads, id); return `<td class="${v !== a ? 'diff' : ''}">${esc(v)}</td>`; }).join('') + '</tr>';
+    }
+    h += '</tbody></table></div>';
+    const m = outcomes.filter((o, i) => match[i]);
+    h += m.length
+      ? `<p class="verdict"><b class="yes">The result matches running ${m[0].order.map(x => 'T' + x).join(' then ')} serially.</b></p>`
+      : `<p class="verdict"><b class="no">The result matches no serial order.</b> Red cells differ from what actually happened.</p>`;
+    if (s.aborted.length) h += `<p class="hint">Aborted transactions (${s.aborted.map(a => 'T' + a.id).join(', ')}) are left out.</p>`;
+    el.innerHTML = h;
+  }
+
+  // ---------- step playback ----------
+  const TAGS = {
+    info: ['Info', 'info'], read: ['Read', 'visit'], scan: ['Read table', 'visit'], write: ['Write', 'ok'], insert: ['Insert', 'ok'], delete: ['Delete', 'ok'],
+    nop: ['No effect', 'info'], dup: ['Error', 'bad'], wait: ['Wait', 'split'], queue: ['Queued', 'split'], commit: ['Commit', 'ok'],
+    abort: ['Abort', 'bad'], deadlock: ['Deadlock', 'bad'], serfail: ['Conflict', 'bad'], anomaly: ['Anomaly', 'bad'], skip: ['Skipped', 'info'], done: ['Result', 'found']
+  };
+  const tagHtml = kind => `<span class="tag t-${TAGS[kind][1]}">${TAGS[kind][0]}</span>`;
+
+  function renderLog() {
+    $('log').innerHTML = steps.map((s, i) =>
+      `<li data-i="${i}" tabindex="0"><span class="n">${i + 1}</span>${tagHtml(s.kind)}<span>${s.msg}</span></li>`).join('');
+  }
+
+  function showStep(i, animate = true) {
+    if (!steps.length) return;
+    i = Math.max(0, Math.min(steps.length - 1, i));
+    if (i !== cur) focusAnom = null;
+    cur = i;
+    const st = steps[i];
+    const prevIds = shownRows;
+    shownRows = new Set(st.rows.map(r => r.id));
+    const fresh = new Set(prevIds ? st.rows.filter(r => !prevIds.has(r.id)).map(r => r.id) : []);
+    cancelAnimationFrame(rafId);
+    updateChrome(st);
+    const dur = (!animate || !fresh.size || reduceMotion.matches) ? 0 : Math.min(400, S.speed * 0.5);
+    if (!dur) { keepInView(render(st, 1, new Set())); return; }
+    const t0 = performance.now();
+    const tick = now => {
+      const t = Math.min(1, (now - t0) / dur);
+      render(st, t * (2 - t), fresh);
+      if (t < 1) rafId = requestAnimationFrame(tick);
+    };
+    keepInView(render(st, 0, fresh));
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function redraw() { if (steps.length) { const st = steps[cur]; render(st, 1, new Set()); renderAnoms(st); } }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (!playing) return;
+    if (cur >= steps.length - 1) { playing = false; updatePlayBtn(); return; }
+    timer = setTimeout(() => { showStep(cur + 1); schedule(); }, S.speed);
+  }
+  function stopPlay() { playing = false; clearTimeout(timer); updatePlayBtn(); }
+  function togglePlay() {
+    if (playing) { stopPlay(); return; }
+    if (cur >= steps.length - 1) showStep(0);
+    playing = true; updatePlayBtn(); schedule();
+  }
+  function go(i) { stopPlay(); showStep(i); }
+
+  function updatePlayBtn() {
+    const b = $('playBtn');
+    b.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    b.innerHTML = playing
+      ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg>';
+    b.disabled = steps.length < 2;
+  }
+
+  function updateChrome(st) {
+    $('caption').innerHTML = tagHtml(st.kind) + st.msg;
+    $('counter').textContent = `Step ${cur + 1} of ${steps.length}`;
+    $('firstBtn').disabled = $('prevBtn').disabled = cur === 0;
+    $('nextBtn').disabled = $('lastBtn').disabled = cur >= steps.length - 1;
+    updatePlayBtn();
+    $('undoBtn').disabled = !history.length;
+    $('popBtn').disabled = !ops.length;
+
+    const log = $('log');
+    log.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
+    const li = log.children[cur];
+    if (li) {
+      li.classList.add('active');
+      const box = $('logBox');
+      if (li.offsetTop < box.scrollTop || li.offsetTop + li.offsetHeight > box.scrollTop + box.clientHeight)
+        box.scrollTop = li.offsetTop - box.clientHeight / 2;
+    }
+    $('stWaits').textContent = st.nWaits;
+    $('stAborts').textContent = st.nAborts;
+    $('stAnoms').textContent = st.anoms.length;
+    const live = st.graph.nodes.filter(x => x.st !== 'aborted' && x.st !== 'idle').length;
+    const ser = $('stSer');
+    ser.textContent = live < 2 ? '–' : st.graph.cycle ? 'no' : 'yes';
+    ser.className = live < 2 ? '' : st.graph.cycle ? 'no' : 'yes';
+    renderChips(st);
+    renderDb(st);
+    renderAnoms(st);
+    renderGraph(st);
+  }
+
+  function updateRules() {
+    const L = LEVELS[S.level];
+    $('rules').innerHTML = `<b>${L.name}.</b> ${L.rules}`;
+    document.querySelectorAll('#levels button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.lv === S.level)));
+    $('levelHint').innerHTML = L.cc === 'lock'
+      ? 'Locks: S (shared) is compatible only with S; X (exclusive) with nothing. A deadlock aborts the transaction that closed the cycle.'
+      : L.cc === 'mvcc' ? 'Each write creates a new version; a reader picks the newest version its snapshot can see. Writers of the same row still wait for each other.'
+      : 'Useful as a baseline: every anomaly is possible.';
+  }
+
+  function updatePresetAbout() {
+    const p = PRESETS.find(x => x.id === $('presetSel').value);
+    $('presetAbout').textContent = p ? p.about : 'Your own schedule.';
+  }
+
+  // ---------- wiring ----------
+  $('presetSel').innerHTML = PRESETS.map(p => `<option value="${p.id}">${p.name}</option>`).join('') + '<option value="">Custom</option>';
+  // blur after choosing, so ←/→ step through the run instead of switching scenario
+  $('presetSel').addEventListener('change', e => { loadPreset(e.target.value); e.target.blur(); });
+  $('levels').addEventListener('click', e => { const b = e.target.closest('button[data-lv]'); if (b) setLevel(b.dataset.lv); });
+  $('runBtn').addEventListener('click', () => { pushHistory(); if (!edited('begin')) history.pop(); });
+  $('schedInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('runBtn').click(); }
+  });
+  $('initInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('runBtn').click(); } });
+  $('shuffleBtn').addEventListener('click', () => {
+    if (!ops.length) return;
+    pushHistory();
+    const g = rng(S.seed);
+    $('schedInput').value = fmtSchedule(randomInterleave(ops, g.next));
+    S.seed = g.s;
+    if (!edited('begin')) history.pop();
+  });
+  $('undoBtn').addEventListener('click', undo);
+  $('saveBtn').addEventListener('click', saveRun);
+  $('openBtn').addEventListener('click', () => $('openFile').click());
+  $('openFile').addEventListener('change', e => { openFile(e.target.files[0]); e.target.value = ''; });
+  document.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) { e.preventDefault(); openFile(f); } });
+  $('popBtn').addEventListener('click', () => removeOp(ops.length - 1));
+  $('clearBtn').addEventListener('click', () => {
+    if (!ops.length) return;
+    pushHistory();
+    $('schedInput').value = '';
+    edited('begin');
+  });
+  $('txSeg').addEventListener('click', e => {
+    const b = e.target.closest('button[data-tx]');
+    if (!b) return;
+    S.tx = +b.dataset.tx;
+    document.querySelectorAll('#txSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  document.querySelectorAll('.opgrid button').forEach(b => b.addEventListener('click', () => addOp(b.dataset.op)));
+  ['opKey', 'opVal'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addOp(e.shiftKey ? 'r' : 'w'); } }));
+
+  $('animChk').addEventListener('change', e => { S.animate = e.target.checked; if (!S.animate) stopPlay(); });
+  $('speed').addEventListener('input', e => { S.speed = +e.target.value; $('speedOut').textContent = (S.speed / 1000).toFixed(1) + ' s'; });
+  $('zoom').addEventListener('input', e => { S.zoom = +e.target.value / 100; $('zoomOut').textContent = e.target.value + '%'; redraw(); });
+
+  $('firstBtn').addEventListener('click', () => go(0));
+  $('prevBtn').addEventListener('click', () => go(cur - 1));
+  $('nextBtn').addEventListener('click', () => go(cur + 1));
+  $('lastBtn').addEventListener('click', () => go(steps.length - 1));
+  $('playBtn').addEventListener('click', togglePlay);
+
+  $('log').addEventListener('click', e => { const li = e.target.closest('li'); if (li) go(+li.dataset.i); });
+  $('log').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('li'); if (li) { e.preventDefault(); go(+li.dataset.i); } }
+  });
+  $('sched').addEventListener('click', e => {
+    const b = e.target.closest('.chip');
+    if (!b) return;
+    const i = steps.findIndex(s => s.opi === +b.dataset.i);
+    if (i >= 0) go(i);
+  });
+  $('svg').addEventListener('click', e => {
+    const g = e.target.closest('.op[data-op]');
+    if (g && +g.dataset.op >= 0) removeOp(+g.dataset.op);
+  });
+  const pickAnom = e => {
+    const li = e.target.closest('li[data-a]');
+    if (!li) return;
+    const a = +li.dataset.a, shown = focusAnom !== null ? focusAnom : steps[cur].anom;
+    focusAnom = shown === a ? -1 : a;
+    if (focusAnom === -1) focusAnom = null;
+    stopPlay();
+    redraw();
+  };
+  $('anoms').addEventListener('click', pickAnom);
+  $('anoms').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickAnom(e); } });
+  $('cmp').addEventListener('click', e => { const tr = e.target.closest('tr[data-lv]'); if (tr) setLevel(tr.dataset.lv); });
+  $('cmp').addEventListener('keydown', e => { const tr = e.target.closest('tr[data-lv]'); if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setLevel(tr.dataset.lv); } });
+
+  // ←/→/Home/End step even when a button, log line or table row has focus (clicking one leaves focus there);
+  // only fields that use those keys themselves (text, sliders, dropdowns) keep them
+  document.addEventListener('keydown', e => {
+    const tg = e.target instanceof Element ? e.target : document.body;
+    if (tg.closest('textarea, input[type=text]')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey || tg.closest('input:not([type=checkbox]), select')) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); go(0); }
+    else if (e.key === 'End') { e.preventDefault(); go(steps.length - 1); }
+    else if (e.key.toLowerCase() === 'm') leftPane.toggle();
+    else if (e.key.toLowerCase() === 'r') rightPane.toggle();
+    else if (e.key === ' ' && !tg.closest('button, li, tr, input')) { e.preventDefault(); togglePlay(); }   // Space keeps its usual meaning there
+  });
+
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(redraw, 80); });
+
+  // side panes: hidden on request; then their screen edge, or focus moving into them, shows them over the page for a while
+  function pane(el, edge, btn, pin, cls, store, labels) {
+    let t = 0;
+    const off = () => document.body.classList.contains(cls);
+    const typing = () => el.contains(document.activeElement) && document.activeElement.matches('select, input[type=text], textarea');
+    function peek(on) {
+      clearTimeout(t);
+      if (on) { el.classList.add('peek'); return; }
+      t = setTimeout(() => { if (!el.matches(':hover') && !typing()) el.classList.remove('peek'); }, 300);
+    }
+    const mark = v => { btn.setAttribute('aria-pressed', String(v)); btn.setAttribute('aria-label', labels[v ? 1 : 0]); };
+    function set(v) {
+      document.body.classList.toggle(cls, v);
+      el.classList.remove('peek');
+      mark(v);
+      try { localStorage.setItem(store, v ? 'off' : 'on'); } catch (e) {}
+      redraw();
+    }
+    btn.addEventListener('click', () => set(!off()));
+    pin.addEventListener('click', () => set(false));
+    edge.addEventListener('mouseenter', () => peek(true));
+    edge.addEventListener('click', () => peek(true));
+    el.addEventListener('mouseenter', () => { if (off()) peek(true); });
+    el.addEventListener('mouseleave', () => peek(false));
+    el.addEventListener('focusin', () => { if (off()) peek(true); });
+    el.addEventListener('focusout', () => peek(false));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && el.classList.contains('peek')) { el.classList.remove('peek'); if (el.contains(document.activeElement)) document.activeElement.blur(); } });
+    try { if (localStorage.getItem(store) === 'off') { document.body.classList.add(cls); mark(true); } } catch (e) {}
+    return { toggle: () => set(!off()) };
+  }
+  const leftPane = pane($('rail'), $('railEdge'), $('railBtn'), $('pinBtn'), 'railoff', 'iso-rail', ['Hide settings', 'Show settings']);
+  const rightPane = pane($('side'), $('sideEdge'), $('sideBtn'), $('pinSide'), 'sideoff', 'iso-side', ['Hide the status and display pane', 'Show the status and display pane']);
+
+  // card info tips: hovering or focusing the (i) shows the tip; a click keeps it open until another click, a click elsewhere or Esc
+  let pinnedTip = null;
+  function showTip(b, on) { $(b.getAttribute('aria-controls')).hidden = !on; b.setAttribute('aria-expanded', String(on)); }
+  function unpinTip() { if (pinnedTip) { showTip(pinnedTip, false); pinnedTip = null; } }
+  document.querySelectorAll('.infobtn').forEach(b => {
+    const hover = on => { if (pinnedTip !== b) showTip(b, on); };
+    b.addEventListener('mouseenter', () => hover(true));
+    b.addEventListener('mouseleave', () => hover(false));
+    b.addEventListener('focus', () => hover(true));
+    b.addEventListener('blur', () => hover(false));
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      if (pinnedTip === b) { unpinTip(); return; }
+      unpinTip();
+      pinnedTip = b; showTip(b, true);
+    });
+  });
+  document.addEventListener('click', e => { if (pinnedTip && !e.target.closest('.tip')) unpinTip(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') unpinTip(); });
+
+  // theme toggle
+  const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => {
+    const a = document.documentElement.getAttribute('data-theme');
+    return a ? a === 'dark' : darkMQ.matches;
+  };
+  const syncThemeBtn = () => { $('themeBtn').textContent = isDark() ? 'Light mode' : 'Dark mode'; };
+  try { const saved = localStorage.getItem('iso-theme'); if (saved) document.documentElement.setAttribute('data-theme', saved); } catch (e) {}
+  $('themeBtn').addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('iso-theme', next); } catch (e) {}
+    syncThemeBtn();
+  });
+  darkMQ.addEventListener && darkMQ.addEventListener('change', syncThemeBtn);
+  syncThemeBtn();
+
+  // initial scenario, shown complete
+  const first = PRESETS.find(p => p.id === 'lu');
+  $('presetSel').value = first.id;
+  $('schedInput').value = first.ops;
+  $('initInput').value = first.init;
+  updatePresetAbout();
+  updateRules();
+  runAll('end');
+})();
+</script>
+</body>
+</html>
