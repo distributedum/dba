@@ -50,6 +50,8 @@ Submitted projects must be fully authored by the students and must not contain m
 | PL7 |  | Optimization II . | [pdf](materials/lab5.pdf) | |
 | T11 | 19/11/25 | Transactional isolation (cont). | [pdf](materials/10-acid.pdf) [demo](materials/isolation.html) |  B4 7; P4 |
 | PL8 |  | Isolation and Recovery. | [pdf](materials/lab6.pdf) [zip](materials/skelbench-v2.zip) | |
+| T12 | 26/11/26 | What next? | [pdf](materials/11-next.pdf) |   |
+
 
 ## Bibliography
 
